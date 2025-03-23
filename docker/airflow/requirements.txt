@@ -1,0 +1,11 @@
+apache-airflow==2.7.1
+kafka-python==2.0.2
+google-cloud-storage==2.10.0
+google-cloud-bigquery==3.11.4
+pandas==2.0.3
+pandas-gbq==0.19.2
+sqlalchemy>=2.0.0
+paramiko>=3.0.0
+psycopg2-binary>=2.9.0
+pymysql>=1.1.0
+fastavro>=1.7.0
