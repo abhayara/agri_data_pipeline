@@ -7,3 +7,7 @@
 ### added streaming servive docker-compose
 
 ### added postgres docker-compose
+
+### added spark cluster docker setup
+
+### added airflow docker  setup
