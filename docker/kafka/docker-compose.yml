@@ -23,6 +23,12 @@ services:
         KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
         KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
         KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 100
+      healthcheck:
+        test: ["CMD", "kafka-topics", "--bootstrap-server", "kafka:9092", "--list"]
+        interval: 30s
+        timeout: 10s
+        retries: 5
+        start_period: 30s
 
   schema-registry:
     image: confluentinc/cp-schema-registry:7.2.0
@@ -38,9 +44,15 @@ services:
       SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: ${SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS}
       SCHEMA_REGISTRY_HOST_NAME: ${SCHEMA_REGISTRY_HOST_NAME}
       SCHEMA_REGISTRY_LISTENERS: ${SCHEMA_REGISTRY_LISTENERS}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/subjects"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
   
   zookeeper:
-    image: confluentinc/cp-zookeeper:7.2.0
+    image: confluentinc/cp-zookeeper:7.3.0
     hostname: zookeeper
     container_name: ${PROJECT_NAME}-zookeeper
     ports:
@@ -48,6 +60,12 @@ services:
     environment:
       ZOOKEEPER_CLIENT_PORT: ${ZOOKEEPER_CLIENT_PORT}
       ZOOKEEPER_TICK_TIME: ${ZOOKEEPER_TICK_TIME}
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo ruok | nc localhost 2181 | grep imok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
   
   control-center:
     image: confluentinc/cp-enterprise-control-center:7.2.0
@@ -68,6 +86,12 @@ services:
       CONTROL_CENTER_MONITORING_INTERCEPTOR_TOPIC_PARTITIONS: ${CONTROL_CENTER_MONITORING_INTERCEPTOR_TOPIC_PARTITIONS}
       CONFLUENT_METRICS_TOPIC_REPLICATION: ${CONFLUENT_METRICS_TOPIC_REPLICATION}
       PORT: ${CONTROL_CENTER_PORT}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9021/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
 
   kafka-rest:
     image: confluentinc/cp-kafka-rest:7.2.0
@@ -84,3 +108,9 @@ services:
       KAFKA_REST_SCHEMA_REGISTRY_URL: ${KAFKA_REST_SCHEMA_REGISTRY_URL}
       KAFKA_REST_HOST_NAME: ${KAFKA_REST_HOST_NAME}
       KAFKA_REST_LISTENERS: ${KAFKA_REST_LISTENERS}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/topics"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
