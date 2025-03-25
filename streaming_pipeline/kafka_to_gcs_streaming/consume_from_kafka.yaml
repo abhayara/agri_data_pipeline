@@ -1,0 +1,6 @@
+connector_type: kafka
+bootstrap_server: "kafka:29092"
+topic: agri_data
+consumer_group: airflow_consumer_group
+include_metadata: true
+api_version: 0.10.2
