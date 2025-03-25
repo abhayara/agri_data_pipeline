@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.3.0] - 2024-03-25
+
+### Added
+
+- Batch pipeline components for processing agricultural data
+- Spark transformation pipeline for data processing
+- BigQuery data exporters for dimensions and facts tables
+- Integration of batch pipeline functionality in unified commands script
+- Metadata and trigger configuration for batch pipeline
+- Enhanced service coordination between Spark, Airflow, and BigQuery
+
+### Changed
+
+- Unified command-line interface for all pipeline operations
+- Enhanced environment variable configuration for batch processing
+
 ## [1.0.0] - 2024-03-25
 
 ### Added
