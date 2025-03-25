@@ -1,0 +1,17 @@
+{
+    "postgres_default": {
+        "conn_type": "postgres",
+        "host": "postgres",
+        "schema": "agri_db",
+        "login": "root",
+        "password": "root",
+        "port": 5432
+    },
+    "gcp_default": {
+        "conn_type": "google_cloud_platform",
+        "extra": {
+            "project": "agri-data-454414",
+            "keyfile_json": "/opt/airflow/gcp-creds.json"
+        }
+    }
+} 
