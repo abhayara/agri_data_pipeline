@@ -1,0 +1,54 @@
+FIELDS,DESCRIPTION
+Farm_ID,:  Unique identifier for the farm
+Farm_Type,":  Type of farm: Crop, Livestock, Mixed, Horticulture"
+Farm_Size_Acres,:  Size of the farm in acres
+Farm_Location,:  Location coordinates of the farm
+Farmer_ID,:  Unique identifier for the farmer
+Farmer_Name,:  Name of the farmer
+Farmer_Contact,:  Contact information of the farmer
+Crop_ID,:  Unique identifier for the crop
+Crop_Type,":  Type of crop: Grain, Vegetable, Fruit, Fiber, Oilseed"
+Crop_Variety,:  Specific variety of the crop
+Planting_Date,:  Date when the crop was planted
+Harvest_Date,:  Date when the crop was harvested
+Expected_Yield,:  Expected yield of the crop per acre
+Actual_Yield,:  Actual yield of the crop per acre
+Yield_Unit,":  Unit of yield measurement: kg, ton, bushel"
+Soil_Type,":  Type of soil: Clay, Sandy, Loam, Silt, Peaty"
+Soil_pH,:  pH level of the soil
+Soil_Moisture,:  Moisture content of the soil in percentage
+Soil_Temperature,:  Temperature of the soil in Celsius
+Soil_Fertility,:  Fertility level of the soil (1-10 scale)
+Weather_Temperature,:  Average temperature in Celsius during growth period
+Weather_Humidity,:  Average humidity percentage during growth period
+Weather_Rainfall,:  Total rainfall in mm during growth period
+Weather_Sunlight,:  Average daily sunlight hours during growth period
+Irrigation_Method,":  Method of irrigation: Drip, Sprinkler, Flood, None"
+Irrigation_Amount,:  Amount of water used for irrigation in liters per acre
+Fertilizer_Type,":  Type of fertilizer used: Organic, Chemical, Mixed, None"
+Fertilizer_Amount,:  Amount of fertilizer used in kg per acre
+Pesticide_Type,":  Type of pesticide used: Herbicide, Insecticide, Fungicide, None"
+Pesticide_Amount,:  Amount of pesticide used in liters per acre
+Equipment_Used,":  Equipment used in farming: Tractor, Harvester, Drone, Manual"
+Labor_Hours,:  Total labor hours spent per acre
+Production_Cost,:  Total cost of production per acre
+Market_Price,:  Market price of the crop per unit
+Total_Revenue,:  Total revenue generated from the crop
+Profit_Margin,:  Profit margin percentage
+Storage_Method,":  Method of storage: Silo, Warehouse, Cold Storage, None"
+Storage_Duration,:  Duration of storage in days
+Transportation_Method,":  Method of transportation: Truck, Train, Ship, Air"
+Transportation_Distance,:  Distance transported in kilometers
+Quality_Grade,":  Quality grade of the crop: Premium, Standard, Basic"
+Certification,":  Type of certification: Organic, Fair Trade, GAP, None"
+Carbon_Footprint,:  Carbon footprint in kg CO2 equivalent per acre
+Water_Footprint,:  Water footprint in cubic meters per ton
+Sustainability_Score,:  Overall sustainability score (1-10 scale)
+Market_Destination,":  Destination market: Local, Regional, National, International"
+Customer_Segment,":  Type of customer: Retailer, Processor, Wholesaler, Direct Consumer"
+Order_ID,:  Unique identifier for the order
+Order_Date,:  Date when the order was placed
+Delivery_Date,:  Date when the order was delivered
+Order_Status,":  Status of the order: Pending, Processing, Shipped, Delivered, Cancelled"
+Payment_Method,":  Method of payment: Cash, Credit, Bank Transfer, Digital Wallet"
+Payment_Status,":  Status of payment: Pending, Completed, Failed, Refunded" 
