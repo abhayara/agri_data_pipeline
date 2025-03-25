@@ -186,8 +186,8 @@ def produce_data(bootstrap_servers, topic, num_messages=100, delay=0.5):
                 
                 # Convert to JSON string
                 json_data = json.dumps(data)
-                
-                # Produce the message to the specified Kafka topic
+
+            # Produce the message to the specified Kafka topic
                 producer.produce(topic, value=json_data, callback=delivery_report)
                 
                 # Periodically flush to ensure messages are sent

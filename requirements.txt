@@ -1,4 +1,9 @@
-pyspark
-confluent_kafka
-dbt
-faker
+pyspark==3.3.2
+confluent_kafka==2.1.1
+dbt==1.5.3
+faker==18.9.0
+google-cloud-storage==2.9.0
+google-cloud-bigquery==3.11.4
+pandas==2.0.3
+python-dotenv==1.0.0
+pyarrow==13.0.0
