@@ -1,0 +1,21 @@
+triggers:
+- name: daily_agricultural_data_load
+  description: Load agricultural data to BigQuery every day at 2 AM
+  pipeline_uuid: agricultural_data_to_bigquery
+  schedule_type: time
+  schedule_interval: 0 2 * * *
+  status: active
+  settings:
+    timeout: 3600
+    skip_if_previous_running: true
+    variables:
+      execution_date: "{{ execution_date }}"
+- name: manual_agricultural_data_load
+  description: Manually triggered pipeline to load agricultural data to BigQuery
+  pipeline_uuid: agricultural_data_to_bigquery
+  schedule_type: manual
+  status: active
+  settings:
+    timeout: 3600
+    variables:
+      execution_date: "{{ execution_date }}"
