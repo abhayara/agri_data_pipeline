@@ -1,0 +1,11 @@
+default:
+  target: dev
+  outputs:
+    dev:
+      type: bigquery
+      method: service-account
+      project: "{{ env_var('GCP_PROJECT_ID', 'agri-data-454414') }}"  # Use environment variable or default
+      dataset: agri_data
+      keyfile: ../gcp-creds.json  # Path relative to the business_transformations directory
+      threads: 4
+      timeout_seconds: 300 
