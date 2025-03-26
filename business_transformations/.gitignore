@@ -5,6 +5,7 @@ dbt_packages/
 logs/
 dbt_modules/
 profiles.yml
+dbt_cloud.yml
 
 # Python
 __pycache__/
