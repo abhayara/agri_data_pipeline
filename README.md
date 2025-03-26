@@ -1,6 +1,25 @@
 # Agricultural Data Pipeline
 
-This project implements a comprehensive data pipeline for agricultural data processing, using both streaming and batch processing approaches.
+[![GitHub](https://img.shields.io/badge/GitHub-Agri_Data_Pipeline-blue?logo=github)](https://github.com/abhayra12/agri_data_pipeline)
+[![Python](https://img.shields.io/badge/Python-3.8+-blue?logo=python&logoColor=white)](https://www.python.org/)
+[![Kafka](https://img.shields.io/badge/Kafka-Streaming-red?logo=apache-kafka&logoColor=white)](https://kafka.apache.org/)
+[![dbt](https://img.shields.io/badge/dbt-Transformations-orange?logo=dbt&logoColor=white)](https://www.getdbt.com/)
+[![BigQuery](https://img.shields.io/badge/BigQuery-Data_Warehouse-green?logo=google-cloud&logoColor=white)](https://cloud.google.com/bigquery)
+
+## Project Overview
+
+This project implements a comprehensive data pipeline for agricultural data processing, using both streaming and batch processing approaches. The Agricultural Data Pipeline integrates real-time data from various agricultural sources, processes them efficiently, stores historical data for analysis, and provides visualization and analytics tools for informed decision-making in agriculture.
+
+### Problem Statement
+
+**Challenge:** Traditional agricultural data analysis relies on static, historical data, leading to delayed insights, inefficient resource allocation, and missed optimization opportunities across farms, crops, and sustainability metrics.
+
+**Proposed Solution:**
+1. **Integrating Data Streams:** Real-time data on farms, crops, weather, and production metrics are collected using Kafka.
+2. **Real-time Data Processing:** Streaming pipelines analyze incoming data, identifying patterns and anomalies.
+3. **Historical Data Storage:** Comprehensive historical data stored in BigQuery enables trend analysis and predictive modeling.
+4. **Advanced Analytics:** dbt transformations create business-level metrics for sustainability, yield optimization, and farm performance.
+5. **Visualization and Insights:** Metabase dashboards provide actionable insights for agricultural decision-making.
 
 ## Architecture Overview
 
@@ -13,6 +32,20 @@ The pipeline consists of the following services:
 - **BigQuery**: For data warehousing
 - **dbt**: For data transformations and business logic
 - **Metabase**: For data visualization
+
+### Data Flow
+
+- **Data Ingestion**: Agricultural events from sensors, farm systems, and CSV files are produced in a streaming pipeline and sent to Kafka topics.
+  
+- **Batch Processing**: Kafka Streaming pipeline consumes data and stores it in Google Cloud Storage as "raw_data" (bronze-level data).
+
+- **Transformation**: Raw data from GCS undergoes transformation by Apache Spark into OLAP database design (star schema format) and is stored back into GCS as "transformed" silver-level data.
+
+- **Export to BigQuery**: The pipeline exports transformed data from GCS to BigQuery, creating dimensional and fact tables.
+
+- **DBT Transformation**: Transformed data in BigQuery is further processed into "business transformed" gold-level data using dbt, providing advanced agricultural analytics.
+
+- **Terraform**: Infrastructure as Code provided by Terraform creates GCP resources like cloud storage buckets, BigQuery datasets, and compute services.
 
 ## Recent Improvements
 
@@ -54,6 +87,59 @@ The pipeline consists of the following services:
 - Created staging models for all data dimensions and facts
 - Developed analytical models for farm performance, crop metrics, and sustainability
 - Enabled efficient data exploration and reporting
+
+## Other Features
+
+- **Data Quality Assurance**: The architecture incorporates three data levels—bronze, silver, and gold—ensuring high-quality data for analysts and scientists.
+
+- **Flexibility and Scalability**: Dockerized containers offer flexibility and scalability, enabling seamless integration and deployment of components.
+
+- **Comprehensive Analytics**: The gold-level data in BigQuery serves as a foundation for dashboarding, reporting, and machine learning for agricultural optimization.
+
+## Tech Stack
+
+- **Docker**: Containerization platform providing isolation, portability, and scalability
+- **Apache Kafka**: Distributed streaming platform for real-time data ingestion
+- **Apache Airflow**: Workflow orchestration tool for managing data pipelines
+- **Apache Spark**: Distributed computing framework for processing large-scale data
+- **dbt (Data Build Tool)**: Data transformation tool for analytics models
+- **PostgreSQL**: Relational database for structured data storage
+- **Metabase**: Business intelligence tool for creating visualizations and dashboards
+- **Google BigQuery**: Cloud data warehouse for storing and analyzing datasets
+- **Google Cloud Storage (GCS)**: Object storage for data lake implementation
+- **Terraform**: Infrastructure as code tool for provisioning cloud resources
+
+## Pipeline Overview
+
+### 1. Streaming Pipeline
+
+- **Folder**: [Streaming Pipeline](./streaming_pipeline/)
+- Processes continuous data streams in real-time from agricultural sources
+- Utilizes Kafka for efficient data ingestion, processing, and storage
+- **Execution**: Detailed in the Streaming Pipeline documentation
+
+### 2. Batch Pipeline
+
+- **Folder**: [Batch Pipeline](./batch_pipeline/)
+- **Spark Pipeline**: Processes raw agricultural data from GCS, performing OLAP transformations
+- **BigQuery Export**: Loads transformed data into BigQuery as dimensional and fact tables
+- **Execution**: Detailed in the Batch Pipeline documentation
+
+### 3. dbt Transformation Pipeline
+
+- **Folder**: [Business Transformations](./business_transformations/)
+- Transforms silver-level data in BigQuery into gold-level business analytics
+- Creates models for farm analytics, crop performance, sustainability metrics, yield optimization, and weather impact analysis
+- **Execution**: Detailed in the dbt documentation
+
+### 4. Dockerized Services
+
+- **Folder**: [Docker](./docker/)
+- **Kafka**: Services for data streaming
+- **Airflow**: Services for workflow orchestration
+- **Spark**: Services for data processing
+- **Metabase**: Services for data visualization
+- **PostgreSQL**: Services for data storage
 
 ## Setup Instructions
 
@@ -113,16 +199,89 @@ After starting the services:
 3. Copy the API endpoint for your batch pipeline DAG
 4. Update API calls in your scripts with the copied endpoint
 
-## Quick Start
+### 6. Set Up GCP Resources with Terraform
 
-1. Copy `.env.example` to `.env` and configure environment variables
-2. Run `./docker/start_docker.sh` to start the services
-3. Access services:
-   - Airflow: http://localhost:8080 (username: airflow, password: airflow)
-   - Spark Master: http://localhost:8090
-   - Kafka Control Center: http://localhost:9021
-   - Metabase: http://localhost:3000
-   - PgAdmin: http://localhost:5050
+Before starting, create a service account in GCP and get the credentials.json key.
+Copy it in the appropriate directory as specified in the documentation.
+
+```bash
+terraform-start
+```
+
+This initializes terraform, gives you the overall plan, and creates the resources.
+To destroy resources, use the command `terraform-destroy`.
+
+## Step-by-Step Execution Guide
+
+Whenever you start a new terminal, run this command to make all functions available:
+
+```bash
+source commands.sh
+```
+
+### 1. Start Streaming Pipeline
+
+```bash
+start-streaming-pipeline
+```
+
+This command initiates the streaming pipeline, which involves:
+
+- **Start Kafka**: Launches Kafka components
+- **Start Airflow**: Initiates Airflow for workflow orchestration
+- **Generate Data**: Triggers data generation in Airflow
+- **Stream Data**: Starts streaming agricultural data
+
+### 2. Start Batch Pipeline
+
+```bash
+start-batch-pipeline
+```
+
+This command runs the batch pipeline:
+
+- **Start Spark**: Launches Spark cluster
+- **OLAP Transformation**: Transforms raw data into dimensional models
+- **Export to BigQuery**: Loads data into BigQuery
+
+### 3. Run dbt Transformations
+
+```bash
+dbt run --profiles-dir business_transformations
+```
+
+This creates gold-level business transformations in BigQuery.
+
+### 4. Create Dashboards
+
+```bash
+start-metabase
+```
+
+With Metabase running, create dashboards using the transformed data.
+
+### 5. Automated Execution
+
+To run the entire pipeline with a single command:
+
+```bash
+start-project
+```
+
+This runs Terraform setup, streaming pipeline, batch pipeline, and dbt transformations sequentially.
+
+## Project Structure
+
+```
+agri_data_pipeline/
+├── batch_pipeline/            # Batch processing components
+├── streaming_pipeline/        # Streaming data components
+├── business_transformations/  # dbt models for data transformations
+├── docker/                    # Docker configurations
+├── terraform/                 # Infrastructure as code
+├── commands.sh                # Pipeline automation commands
+└── README.md                  # This documentation
+```
 
 ## Data Flow
 
@@ -141,38 +300,6 @@ After starting the services:
 2. Core analytical models are created from staging views
 3. Final data models power dashboards and analytics
 
-## Running the Pipeline
-
-```bash
-# Source the commands file to make functions available
-source commands.sh
-
-# Start the entire pipeline with dbt transformations
-start-project
-
-# Or start individual components
-start-kafka
-start-airflow
-start-spark
-start-batch-pipeline
-
-# Run dbt transformations manually
-dbt run --profiles-dir business_transformations
-```
-
-## Project Structure
-
-```
-agri_data_pipeline/
-├── batch_pipeline/            # Batch processing components
-├── streaming_pipeline/        # Streaming data components
-├── business_transformations/  # dbt models for data transformations
-├── docker/                    # Docker configurations
-├── terraform/                 # Infrastructure as code
-├── commands.sh                # Pipeline automation commands
-└── README.md                  # This documentation
-```
-
 ## Troubleshooting
 
 Common issues and their solutions:
@@ -184,9 +311,21 @@ Common issues and their solutions:
 - **dbt errors**: See the `business_transformations/dbt_guide.md` for troubleshooting 
 - **Airflow connection errors**: Verify Airflow is running with `docker ps`
 
+## Deliverables
+
+The project delivers:
+
+- Integration of agricultural data streams using Kafka
+- Real-time data processing and analysis using Spark and Airflow
+- Historical data storage and analysis in BigQuery
+- Business transformations using dbt
+- Interactive dashboards for agricultural insights
+- Comprehensive documentation and setup guides
+
 ## Additional Resources
 
 - [DBT Documentation](https://docs.getdbt.com/)
 - [Airflow Documentation](https://airflow.apache.org/docs/)
 - [Kafka Documentation](https://kafka.apache.org/documentation/)
-- [BigQuery Documentation](https://cloud.google.com/bigquery/docs) 
+- [BigQuery Documentation](https://cloud.google.com/bigquery/docs)
+- [Terraform Documentation](https://www.terraform.io/docs) 
