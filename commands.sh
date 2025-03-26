@@ -1,5 +1,13 @@
+#!/bin/bash
+
+# Project configuration
 PROJECT_NAME='agri-data'
 EXPORT_TO_BIGQUERY_PIPELINE_UUID='94ab2c7a2aa24bde8e148ef84c88a10f'
+
+# =========================================================
+# UTILITY FUNCTIONS
+# =========================================================
+
 # Check if the network exists; if not, create it
 if ! docker network inspect ${PROJECT_NAME}-network &>/dev/null; then
     docker network create ${PROJECT_NAME}-network
@@ -17,10 +25,34 @@ check_port() {
     fi
 }
 
-# Function to start streaming data
-stream-data() {
-	docker-compose -f ./docker/streaming/docker-compose.yaml up
+# Git helper function
+gitting() {
+    git add .
+    sleep 2
+    git commit -m "Update from Local"
+    sleep 2
+    git push -u origin main
 }
+
+# =========================================================
+# INFRASTRUCTURE SETUP FUNCTIONS
+# =========================================================
+
+# Function to initialize and apply Terraform
+terraform-start() {
+    terraform -chdir=terraform init
+    terraform -chdir=terraform plan
+    terraform -chdir=terraform apply
+}
+
+# Function to destroy Terraform resources
+terraform-destroy() {
+    terraform -chdir=terraform destroy
+}
+
+# =========================================================
+# SERVICE MANAGEMENT FUNCTIONS
+# =========================================================
 
 # Function to start Kafka
 start-kafka() {
@@ -30,7 +62,7 @@ start-kafka() {
         echo "Cannot start Kafka due to port conflict."
         return 1
     fi
-	docker-compose -f ./docker/kafka/docker-compose.yml up -d
+    docker-compose -f ./docker/kafka/docker-compose.yml up -d
 }
 
 # Function to start Spark
@@ -44,8 +76,8 @@ start-spark() {
     # Ensure the build script is executable and run it
     chmod +x ./docker/spark/build.sh
     ./docker/spark/build.sh
-	# Start Spark containers
-	docker-compose -f ./docker/spark/docker-compose.yml up -d
+    # Start Spark containers
+    docker-compose -f ./docker/spark/docker-compose.yml up -d
 }
 
 # Function to start Airflow
@@ -109,8 +141,25 @@ stop-metabase() {
     docker-compose -f ./docker/metabase/docker-compose.yml down
 }
 
+# Function to stop all services
+stop-all-services() {
+    stop-airflow
+    stop-kafka
+    stop-spark
+    stop-metabase
+}
+
+# =========================================================
+# DATA PIPELINE FUNCTIONS
+# =========================================================
+
+# Function to start streaming data
+stream-data() {
+    docker-compose -f ./docker/streaming/docker-compose.yaml up
+}
+
 # Function to start the streaming pipeline
-start-streaming-pipeline(){
+start-streaming-pipeline() {
     # Start Kafka and Airflow, then begin streaming data
     start-kafka
     if [ $? -ne 0 ]; then
@@ -134,13 +183,14 @@ start-streaming-pipeline(){
 }
 
 # Function to stop the streaming pipeline
-stop-streaming-pipeline(){
+stop-streaming-pipeline() {
     # Stop Kafka and Airflow
     stop-kafka
     stop-airflow
 }
 
-olap-transformation-pipeline(){
+# Function to trigger OLAP transformation pipeline
+olap-transformation-pipeline() {
     # Execute the primary pipeline DAG in Airflow
     echo "Triggering the main data pipeline in Airflow..."
     curl -X POST "http://localhost:8080/api/v1/dags/agri_data_pipeline/dagRuns" \
@@ -150,7 +200,7 @@ olap-transformation-pipeline(){
 }
 
 # Function to start the batch processing pipeline
-start-batch-pipeline(){
+start-batch-pipeline() {
     echo "Starting Agricultural Data Batch Pipeline..."
 
     # Check if Spark is running
@@ -221,24 +271,35 @@ start-batch-pipeline(){
     olap-transformation-pipeline
 }
 
-gitting(){
-    git add .
-    sleep 2
-    git commit -m "Update from Local"
-    sleep 2
-    git push -u origin main
+# Function to run dbt transformations
+run-dbt-transformations() {
+    echo "Running dbt transformations..."
+    
+    # Check if dbt_cloud.yml exists in ~/.dbt directory
+    if [ ! -f ~/.dbt/dbt_cloud.yml ]; then
+        echo "dbt Cloud configuration file not found at ~/.dbt/dbt_cloud.yml"
+        echo "Please follow the guide at https://docs.getdbt.com/docs/cloud/cloud-cli-installation to configure dbt Cloud CLI"
+        echo "After installing, copy your dbt_cloud.yml file to ~/.dbt/ directory"
+        return 1
+    fi
+    
+    # Run dbt (use --profiles-dir if needed)
+    dbt run
+    
+    if [ $? -ne 0 ]; then
+        echo "Failed to run dbt transformations. Check logs for errors."
+        return 1
+    fi
+    
+    echo "dbt transformations completed successfully!"
 }
 
-terraform-start(){
-    terraform -chdir=terraform init
-    terraform -chdir=terraform plan
-    terraform -chdir=terraform apply
-}
-terraform-destroy(){
-    terraform -chdir=terraform destroy
-}
+# =========================================================
+# MAIN EXECUTION FUNCTION
+# =========================================================
 
-start-project(){
+# Function to start the entire project
+start-project() {
     echo "Checking port availability for all services..."
     # Check all required ports
     check_port 8080 && check_port 9092 && check_port 2181 && check_port 8081 && check_port 9021 && \
@@ -270,16 +331,21 @@ start-project(){
     fi
     start-batch-pipeline
     sleep 30
-    echo "Batch pipeline execution complete,starting dbt pipeline..."
-    dbt run
+    echo "Batch pipeline execution complete, starting dbt pipeline..."
+    run-dbt-transformations
     echo "dbt pipeline execution complete, your data is ready in Bigquery for downstream usecases."
     echo "Start making dashboard in metabase"
     start-metabase
 }
 
-stop-all-services(){
-    stop-airflow
-    stop-kafka
-    stop-spark
-    stop-metabase
-}
+# Display welcome message when sourcing the file
+echo "==================================================="
+echo "Agricultural Data Pipeline Commands Loaded"
+echo "==================================================="
+echo "To start the entire pipeline: start-project"
+echo "For individual components:"
+echo "  - start-streaming-pipeline"
+echo "  - start-batch-pipeline"
+echo "  - run-dbt-transformations"
+echo "  - start-metabase"
+echo "==================================================="

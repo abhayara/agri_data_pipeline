@@ -182,13 +182,26 @@ cp .env.example .env
 
 ### 4. Set Up dbt Cloud
 
-```bash
-# Create .dbt directory
-mkdir -p ~/.dbt
+Follow these steps to set up dbt Cloud CLI:
 
-# Copy dbt Cloud configuration file to .dbt directory
-cp dbt_cloud.yml ~/.dbt/
-```
+1. Create a dbt Cloud account at [getdbt.com](https://getdbt.com/) if you don't have one
+2. Create a new project in dbt Cloud for your agri data pipeline
+3. Install the dbt Cloud CLI using [official instructions](https://docs.getdbt.com/docs/cloud/cloud-cli-installation)
+4. Generate a service token in dbt Cloud:
+   - Go to Account Settings > Service Tokens
+   - Create a new token with appropriate permissions
+5. Login to dbt Cloud CLI and generate your configuration file:
+   ```bash
+   # Install dbt Cloud CLI
+   pip install dbt-cloud
+   
+   # Login to dbt Cloud
+   dbt-cloud login
+   
+   # This will create ~/.dbt/dbt_cloud.yml configuration file
+   ```
+
+The `dbt_cloud.yml` file contains your project configuration and authentication information. For more details, see the [dbt Cloud CLI documentation](https://docs.getdbt.com/docs/cloud/cloud-cli-installation).
 
 ### 5. Configure Airflow API Endpoints (Manual Step)
 
@@ -247,10 +260,10 @@ This command runs the batch pipeline:
 ### 3. Run dbt Transformations
 
 ```bash
-dbt run --profiles-dir business_transformations
+run-dbt-transformations
 ```
 
-This creates gold-level business transformations in BigQuery.
+This creates gold-level business transformations in BigQuery using dbt Cloud.
 
 ### 4. Create Dashboards
 
@@ -310,6 +323,7 @@ Common issues and their solutions:
 - **GCP credential errors**: Verify that `gcp-creds.json` is properly mounted
 - **dbt errors**: See the `business_transformations/dbt_guide.md` for troubleshooting 
 - **Airflow connection errors**: Verify Airflow is running with `docker ps`
+- **dbt Cloud CLI issues**: Ensure your `~/.dbt/dbt_cloud.yml` file exists and contains valid credentials
 
 ## Deliverables
 
@@ -325,6 +339,7 @@ The project delivers:
 ## Additional Resources
 
 - [DBT Documentation](https://docs.getdbt.com/)
+- [DBT Cloud CLI Documentation](https://docs.getdbt.com/docs/cloud/cloud-cli-installation)
 - [Airflow Documentation](https://airflow.apache.org/docs/)
 - [Kafka Documentation](https://kafka.apache.org/documentation/)
 - [BigQuery Documentation](https://cloud.google.com/bigquery/docs)

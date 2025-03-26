@@ -4,6 +4,7 @@ target/
 dbt_packages/
 logs/
 dbt_modules/
+profiles.yml
 
 # Python
 __pycache__/
