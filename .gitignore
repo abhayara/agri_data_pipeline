@@ -4,3 +4,4 @@ __pycache__/
 *.pyc
 .venv/
 supply_chain_finance/
+gcp-creds.json

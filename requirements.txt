@@ -1,13 +1,13 @@
 # Core requirements with fixed versions
 pyspark==3.1.3
-confluent_kafka==2.0.2
+confluent_kafka
 python-dotenv==0.21.1
 pandas==1.5.3
-pyarrow==10.0.1
+pyarrow
 
 # GCP dependencies
-google-cloud-storage==2.7.0
-google-cloud-bigquery==3.3.5
+google-cloud-storage
+google-cloud-bigquery
 
 # Data generation
 faker==15.3.4
