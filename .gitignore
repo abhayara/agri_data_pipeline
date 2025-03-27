@@ -1,5 +1,6 @@
-*.env
+
 extras/
 __pycache__/
 *.pyc
 .venv/
+supply_chain_finance/

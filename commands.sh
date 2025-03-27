@@ -155,7 +155,7 @@ stop-all-services() {
 
 # Function to start streaming data
 stream-data() {
-    docker-compose -f ./docker/streaming/docker-compose.yaml up
+    docker-compose -f ./docker/streaming/docker-compose.yaml up -d
 }
 
 # Function to start the streaming pipeline
