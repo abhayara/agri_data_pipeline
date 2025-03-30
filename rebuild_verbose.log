@@ -17,3 +17,48 @@ Deleted Containers:
 9a2b991afcbcf7cf397dc15d1c07c68c424c40170fe3e6afe3a970ea36a2b710
 
 Total reclaimed space: 459.6MB
+[dbt-cloud 5d336e7] Checkpoint: Clean environment before rebuild - 2025-03-30 10:05:37
+ 12 files changed, 3818 insertions(+), 43 deletions(-)
+ rewrite docker/airflow/dags/__pycache__/kafka_to_gcs_dag.cpython-37.pyc (67%)
+ create mode 100644 docker/airflow/dags/data_consumer/__init__.py
+ rewrite docker/airflow/dags/helpers/__pycache__/__init__.cpython-37.pyc (93%)
+ create mode 100644 rebuild_verbose.log
+
+[0;32m============================================================[0m
+[0;32m== 2. Checking environment[0m
+[0;32m============================================================[0m
+[0;32m✓ Network setup complete[0m
+
+[0;32m============================================================[0m
+[0;32m== 3. Starting Kafka[0m
+[0;32m============================================================[0m
+time="2025-03-30T10:06:05Z" level=warning msg="/home/abhay/DE1/agri_data_pipeline/docker/kafka/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+ Container agri_data_pipeline-zookeeper  Creating
+ Container agri_data_pipeline-zookeeper  Created
+ Container agri_data_pipeline-broker  Creating
+ Container agri_data_pipeline-broker  Created
+ Container agri_data_pipeline-schema-registry  Creating
+ Container agri_data_pipeline-kafka-rest  Creating
+ Container agri_data_pipeline-control-center  Creating
+ Container agri_data_pipeline-schema-registry  Created
+ Container agri_data_pipeline-kafka-rest  Created
+ Container agri_data_pipeline-control-center  Created
+ Container agri_data_pipeline-zookeeper  Starting
+ Container agri_data_pipeline-zookeeper  Started
+ Container agri_data_pipeline-broker  Starting
+ Container agri_data_pipeline-broker  Started
+ Container agri_data_pipeline-control-center  Starting
+ Container agri_data_pipeline-kafka-rest  Starting
+ Container agri_data_pipeline-schema-registry  Starting
+ Container agri_data_pipeline-schema-registry  Started
+ Container agri_data_pipeline-kafka-rest  Started
+ Container agri_data_pipeline-control-center  Started
+[0;32m✓ Kafka containers started[0m
+Waiting for Kafka to be ready...
+[0;32m✓ Container agri_data_pipeline-broker is running[0m
+[0;32m✓ Container agri_data_pipeline-zookeeper is running[0m
+[0;33m! Kafka topic 'agri_data' does not exist, will create it[0m
+Creating Kafka topic...
+WARNING: Due to limitations in metric names, topics with a period ('.') or underscore ('_') could collide. To avoid issues it is best to use either, but not both.
+Created topic agri_data.
+[0;32m✓ Kafka topic 'agri_data' created[0m
