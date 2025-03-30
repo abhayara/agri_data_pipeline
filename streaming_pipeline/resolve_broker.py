@@ -3,7 +3,7 @@ import time
 import os
 
 # Get broker IP from environment or use default
-broker_ip = os.environ.get('BROKER_IP', '192.168.80.3')
+broker_ip = os.environ.get('BROKER_IP', '192.168.96.3')
 
 # Attempt to resolve broker hostname
 def resolve_broker():
