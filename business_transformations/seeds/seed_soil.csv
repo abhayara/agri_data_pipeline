@@ -1,0 +1,11 @@
+soil_id,farm_id,ph_level,nutrient_content,texture,organic_matter
+1,1,6.8,High,Loam,4.5
+2,2,6.2,Medium,Sandy,2.8
+3,3,7.1,Low,Clay,3.2
+4,4,6.5,High,Silty,5.1
+5,5,7.3,Medium,Sandy Loam,3.9
+6,6,6.9,High,Clay Loam,4.7
+7,7,7.0,Medium,Silt Loam,3.5
+8,8,6.3,Low,Sandy Clay,2.6
+9,9,6.7,Medium,Loamy Sand,3.0
+10,10,7.2,High,Silty Clay,4.2

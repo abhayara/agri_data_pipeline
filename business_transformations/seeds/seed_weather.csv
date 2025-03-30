@@ -1,0 +1,11 @@
+weather_id,date,location,temperature,precipitation,humidity
+1,2023-01-15,California,18,0,45
+2,2023-01-15,Florida,25,5,70
+3,2023-01-15,Colorado,5,10,30
+4,2023-01-15,Louisiana,22,15,80
+5,2023-01-15,Kansas,8,0,35
+6,2023-02-15,California,20,10,50
+7,2023-02-15,Florida,27,20,75
+8,2023-02-15,Colorado,3,15,40
+9,2023-02-15,Louisiana,24,25,85
+10,2023-02-15,Kansas,10,5,45

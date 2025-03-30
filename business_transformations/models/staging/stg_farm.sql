@@ -5,7 +5,7 @@ with source as (
 select
     farm_id,
     farm_name,
-    location,
-    size_hectares,
+    farm_location as location,
+    farm_size as size_hectares,
     established_date
 from source 

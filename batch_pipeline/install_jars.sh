@@ -15,6 +15,9 @@ if ! docker ps | grep -q "$CONTAINER_NAME"; then
     exit 1
 fi
 
+# Create the jars directory if it doesn't exist
+docker exec $CONTAINER_NAME mkdir -p $CONTAINER_JAR_DIR
+
 # Copy each JAR file to the Spark container
 for jar_file in "$LOCAL_JAR_DIR"/*.jar; do
     if [ -f "$jar_file" ]; then
@@ -31,8 +34,6 @@ done
 
 echo "All JARs installed to Spark container"
 echo "==========================================================="
-return 0
-}
 
 # Function to fix and restart the batch pipeline
 fix-batch-pipeline() {
