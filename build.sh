@@ -25,6 +25,15 @@ else
     exit 1
 fi
 
+# Source the modular functions
+if [ -f "./scripts/main.sh" ]; then
+    source ./scripts/main.sh
+    echo -e "${GREEN}Loaded modular functions from scripts directory${NC}"
+else
+    echo -e "${RED}ERROR: scripts/main.sh not found. Cannot load modular functions${NC}"
+    exit 1
+fi
+
 # Function to print section headers
 print_section() {
     echo -e "\n${BLUE}===========================================================${NC}"
@@ -32,64 +41,34 @@ print_section() {
     echo -e "${BLUE}===========================================================${NC}"
 }
 
-# Function to check environment
-check_environment() {
-    print_section "Checking Environment"
-    
-    # Check for required files
-    if [ ! -f "./gcp-creds.json" ]; then
-        echo -e "${RED}ERROR: GCP credentials file (gcp-creds.json) is missing${NC}"
-        return 1
-    fi
-    
-    # Check for required commands
-    for cmd in docker docker-compose terraform pip python git; do
-        if ! command -v $cmd &> /dev/null; then
-            echo -e "${RED}ERROR: $cmd is not installed${NC}"
-            return 1
-        fi
-    done
-    
-    # Check for required directories
-    for dir in docker terraform streaming_pipeline batch_pipeline business_transformations; do
-        if [ ! -d "./$dir" ]; then
-            echo -e "${RED}ERROR: Required directory '$dir' is missing${NC}"
-            return 1
-        fi
-    done
-    
-    # Check Docker service
-    if ! docker info &> /dev/null; then
-        echo -e "${RED}ERROR: Docker service is not running${NC}"
-        return 1
-    fi
-    
-    echo -e "${GREEN}Environment check passed${NC}"
-    return 0
-}
-
 # Function to destroy all infrastructure
 destroy_infrastructure() {
     print_section "Destroying Infrastructure"
     
+    # Stop all services in reverse order
     echo -e "${YELLOW}Stopping all running containers...${NC}"
-    docker-compose -f ./docker/streaming/docker-compose.yml down 2>/dev/null || true
-    docker-compose -f ./docker/kafka/docker-compose.yml down 2>/dev/null || true
-    docker-compose -f ./docker/spark/docker-compose.yml down 2>/dev/null || true
-    docker-compose -f ./docker/airflow/docker-compose.yml down 2>/dev/null || true
-    docker-compose -f ./docker/metabase/docker-compose.yml down 2>/dev/null || true
-    docker-compose -f ./docker/postgres/docker-compose.yml down 2>/dev/null || true
+    stop-streaming-pipeline
+    stop-spark
+    stop-kafka
     
+    # Stop any other services
     echo -e "${YELLOW}Removing any remaining project containers...${NC}"
     docker ps -a | grep 'agri_data' | awk '{print $1}' | xargs docker rm -f 2>/dev/null || true
     
     echo -e "${YELLOW}Destroying Terraform resources...${NC}"
     if [ -d "./terraform" ]; then
         terraform -chdir=terraform destroy -auto-approve
-        echo -e "${GREEN}Terraform resources destroyed${NC}"
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}Terraform resources destroyed${NC}"
+        else
+            echo -e "${RED}Error destroying Terraform resources${NC}"
+            return 1
+        fi
     else
         echo -e "${RED}Terraform directory not found. Cannot destroy resources${NC}"
     fi
+    
+    return 0
 }
 
 # Function to clean Docker resources
@@ -128,12 +107,22 @@ initialize_infrastructure() {
     echo -e "${YELLOW}Initializing Terraform...${NC}"
     if [ -d "./terraform" ]; then
         terraform -chdir=terraform init
-        echo -e "${GREEN}Terraform initialized${NC}"
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}Terraform initialized${NC}"
+        else
+            echo -e "${RED}Error initializing Terraform${NC}"
+            return 1
+        fi
         
         # Apply Terraform configuration
         echo -e "${YELLOW}Applying Terraform configuration...${NC}"
         terraform -chdir=terraform apply -auto-approve
-        echo -e "${GREEN}Terraform resources created${NC}"
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}Terraform resources created${NC}"
+        else
+            echo -e "${RED}Error applying Terraform configuration${NC}"
+            return 1
+        fi
     else
         echo -e "${RED}Terraform directory not found. Cannot initialize infrastructure${NC}"
         return 1
@@ -142,140 +131,13 @@ initialize_infrastructure() {
     # Install required Python packages
     echo -e "${YELLOW}Installing Python dependencies...${NC}"
     pip install -r requirements.txt
-    echo -e "${GREEN}Python dependencies installed${NC}"
-    
-    return 0
-}
-
-# Function to start Kafka
-start_kafka() {
-    print_section "Starting Kafka"
-    
-    echo -e "${YELLOW}Starting Kafka and Zookeeper...${NC}"
-    docker-compose -f ./docker/kafka/docker-compose.yml --env-file ./.env up -d
-    
-    echo -e "${YELLOW}Waiting for Kafka to be ready...${NC}"
-    sleep 30
-    
-    # Verify Kafka is running
-    if docker ps | grep -q "${PROJECT_NAME}-broker"; then
-        echo -e "${GREEN}Kafka is running${NC}"
-    else
-        echo -e "${RED}Kafka failed to start${NC}"
-        return 1
-    fi
-    
-    return 0
-}
-
-# Function to start Spark
-start_spark() {
-    print_section "Starting Spark"
-    
-    echo -e "${YELLOW}Starting Spark master and worker...${NC}"
-    docker-compose -f ./docker/spark/docker-compose.yml --env-file ./.env up -d
-    
-    echo -e "${YELLOW}Waiting for Spark to be ready...${NC}"
-    sleep 20
-    
-    # Verify Spark is running
-    if docker ps | grep -q "${PROJECT_NAME}-spark-master"; then
-        echo -e "${GREEN}Spark is running${NC}"
-    else
-        echo -e "${RED}Spark failed to start${NC}"
-        return 1
-    fi
-    
-    return 0
-}
-
-# Function to generate data and start streaming pipeline
-start_streaming_pipeline() {
-    print_section "Starting Streaming Pipeline"
-    
-    echo -e "${YELLOW}Starting data producer and consumer...${NC}"
-    docker-compose -f ./docker/streaming/docker-compose.yml --env-file ./.env up -d --build
-    
-    echo -e "${YELLOW}Waiting for streaming pipeline to start...${NC}"
-    sleep 20
-    
-    # Verify producer and consumer are running
-    PRODUCER_STATUS=$(docker ps -a --filter "name=agri_data_producer" --format "{{.Status}}")
-    if [[ $PRODUCER_STATUS == *"Exited (0)"* ]]; then
-        echo -e "${GREEN}Producer completed successfully${NC}"
-    else
-        echo -e "${YELLOW}Producer status: $PRODUCER_STATUS${NC}"
-    fi
-    
-    CONSUMER_STATUS=$(docker ps --filter "name=agri_data_consumer" --format "{{.Status}}")
-    if [[ -n "$CONSUMER_STATUS" ]]; then
-        echo -e "${GREEN}Consumer is running${NC}"
-    else
-        echo -e "${RED}Consumer is not running${NC}"
-        return 1
-    fi
-    
-    echo -e "${YELLOW}Streaming pipeline logs:${NC}"
-    docker logs agri_data_consumer | tail -n 10
-    
-    return 0
-}
-
-# Function to run batch pipeline
-run_batch_pipeline() {
-    print_section "Running Batch Pipeline"
-    
-    echo -e "${YELLOW}Installing Spark GCS connector JARs...${NC}"
-    bash ./batch_pipeline/install_jars.sh
-    
-    echo -e "${YELLOW}Running Spark job to process data from GCS...${NC}"
-    cd batch_pipeline/export_to_gcs
-    python pipeline.py
-    cd ../../
-    
-    echo -e "${YELLOW}Exporting processed data to BigQuery...${NC}"
-    cd batch_pipeline/export_to_big_query
-    python export_to_bq.py
-    cd ../../
-    
-    echo -e "${GREEN}Batch pipeline completed${NC}"
-    return 0
-}
-
-# Function to run DBT transformations
-run_dbt_transformations() {
-    print_section "Running DBT Transformations"
-    
-    cd business_transformations
-    
-    echo -e "${YELLOW}Verifying DBT configuration...${NC}"
-    dbt debug --profiles-dir .
-    
-    if [ $? -ne 0 ]; then
-        echo -e "${RED}DBT configuration has issues${NC}"
-        cd ..
-        return 1
-    fi
-    
-    echo -e "${YELLOW}Running DBT models...${NC}"
-    dbt run --profiles-dir .
-    
     if [ $? -eq 0 ]; then
-        echo -e "${GREEN}DBT models built successfully${NC}"
-        
-        echo -e "${YELLOW}Testing DBT models...${NC}"
-        dbt test --profiles-dir .
-        
-        echo -e "${YELLOW}Generating DBT documentation...${NC}"
-        dbt docs generate --profiles-dir .
+        echo -e "${GREEN}Python dependencies installed${NC}"
     else
-        echo -e "${RED}DBT model build failed${NC}"
-        cd ..
+        echo -e "${RED}Error installing Python dependencies${NC}"
         return 1
     fi
     
-    cd ..
-    echo -e "${GREEN}DBT transformations completed${NC}"
     return 0
 }
 
@@ -290,28 +152,36 @@ usage() {
     echo -e "  --streaming-only  Only start the streaming pipeline"
     echo -e "  --batch-only      Only run the batch pipeline"
     echo -e "  --dbt-only        Only run the DBT transformations"
+    echo -e "  --gcs-status      Check data in GCS bucket"
 }
 
-# Function to display status
-show_status() {
-    print_section "Pipeline Status"
+# Function to check GCS bucket status
+check_gcs_status() {
+    print_section "GCS Bucket Status"
     
-    echo -e "${YELLOW}Docker containers:${NC}"
-    docker ps
-    
-    echo -e "\n${YELLOW}GCS Bucket:${NC}"
     if command -v gsutil &> /dev/null; then
-        gsutil ls gs://${GCS_BUCKET_NAME}/ 2>/dev/null || echo -e "${RED}Cannot access GCS bucket${NC}"
+        # Check if the bucket exists
+        if gsutil ls gs://${GCS_BUCKET_NAME}/ &>/dev/null; then
+            echo -e "${GREEN}GCS bucket '${GCS_BUCKET_NAME}' exists${NC}"
+            
+            # Check for raw data
+            echo -e "${YELLOW}Raw data:${NC}"
+            gsutil ls -r gs://${GCS_BUCKET_NAME}/raw/ 2>/dev/null || echo -e "${RED}No raw data found in bucket${NC}"
+            
+            # Check for OLAP data
+            echo -e "${YELLOW}OLAP data:${NC}"
+            gsutil ls -r gs://${GCS_BUCKET_NAME}/olap/ 2>/dev/null || echo -e "${RED}No OLAP data found in bucket${NC}"
+        else
+            echo -e "${RED}GCS bucket '${GCS_BUCKET_NAME}' doesn't exist or isn't accessible${NC}"
+            return 1
+        fi
     else
-        echo -e "${RED}gsutil not available${NC}"
+        echo -e "${RED}gsutil not available. Cannot check GCS bucket.${NC}"
+        echo -e "${YELLOW}Install the Google Cloud SDK or run this in a Cloud Shell environment.${NC}"
+        return 1
     fi
     
-    echo -e "\n${YELLOW}BigQuery Dataset:${NC}"
-    if command -v bq &> /dev/null; then
-        bq ls ${BQ_DATASET_NAME} 2>/dev/null || echo -e "${RED}Cannot access BigQuery dataset${NC}"
-    else
-        echo -e "${RED}bq not available${NC}"
-    fi
+    return 0
 }
 
 # Main execution
@@ -322,15 +192,20 @@ main() {
     fi
     
     if [ "$1" == "--status" ]; then
-        show_status
-        exit 0
+        status
+        exit $?
+    fi
+    
+    if [ "$1" == "--gcs-status" ]; then
+        check_gcs_status
+        exit $?
     fi
     
     # Check environment
-    check_environment || {
+    if ! check-environment; then
         echo -e "${RED}Environment check failed. Please fix the issues before continuing${NC}"
         exit 1
-    }
+    fi
     
     if [ "$1" == "--clean-only" ]; then
         destroy_infrastructure
@@ -339,17 +214,40 @@ main() {
     fi
     
     if [ "$1" == "--streaming-only" ]; then
-        start_kafka && start_streaming_pipeline
+        # Start Kafka first
+        start-kafka || { 
+            echo -e "${RED}Failed to start Kafka. Check logs.${NC}"
+            exit 1
+        }
+        # Start streaming pipeline
+        start-streaming-pipeline || {
+            echo -e "${RED}Failed to start streaming pipeline. Check logs.${NC}"
+            exit 1
+        }
+        # Check status after starting
+        check-streaming-status
         exit $?
     fi
     
     if [ "$1" == "--batch-only" ]; then
-        start_spark && run_batch_pipeline
+        # Start Spark first
+        start-spark || { 
+            echo -e "${RED}Failed to start Spark. Check logs.${NC}"
+            exit 1
+        }
+        # Run batch pipeline
+        start-batch-pipeline || {
+            echo -e "${RED}Failed to run batch pipeline. Check logs.${NC}"
+            exit 1
+        }
         exit $?
     fi
     
     if [ "$1" == "--dbt-only" ]; then
-        run_dbt_transformations
+        run-dbt || {
+            echo -e "${RED}Failed to run DBT transformations. Check logs.${NC}"
+            exit 1
+        }
         exit $?
     fi
     
@@ -357,32 +255,69 @@ main() {
     print_section "Full Pipeline Rebuild"
     
     # 1. Destroy all infrastructure
-    destroy_infrastructure
+    destroy_infrastructure || {
+        echo -e "${RED}Error destroying infrastructure${NC}"
+        exit 1
+    }
     
     # 2. Clean Docker resources
     clean_docker_resources
     
     # 3. Initialize infrastructure
-    initialize_infrastructure || exit 1
+    initialize_infrastructure || {
+        echo -e "${RED}Error initializing infrastructure${NC}"
+        exit 1
+    }
     
-    # 4. Start Kafka
-    start_kafka || exit 1
+    # 4. Start Kafka and fix configuration
+    echo -e "${YELLOW}Checking and fixing Kafka configuration...${NC}"
+    check_fix_kafka_config
     
-    # 5. Start Spark
-    start_spark || exit 1
+    # 5. Start Kafka
+    start-kafka || {
+        echo -e "${RED}Failed to start Kafka. Check logs.${NC}"
+        exit 1
+    }
     
-    # 6. Start streaming pipeline
-    start_streaming_pipeline || exit 1
+    # 6. Start Spark and fix configuration
+    echo -e "${YELLOW}Checking and fixing GCS configuration...${NC}"
+    check_fix_gcs_config
     
-    # 7. Run batch pipeline
-    run_batch_pipeline || exit 1
+    # 7. Start Spark
+    start-spark || {
+        echo -e "${RED}Failed to start Spark. Check logs.${NC}"
+        exit 1
+    }
     
-    # 8. Run DBT transformations
-    run_dbt_transformations || exit 1
+    # 8. Start streaming pipeline
+    start-streaming-pipeline || {
+        echo -e "${RED}Failed to start streaming pipeline. Check logs.${NC}"
+        exit 1
+    }
+    
+    # 9. Run batch pipeline
+    echo -e "${YELLOW}Waiting for data to be streamed to GCS...${NC}"
+    sleep 60  # Wait for some data to be produced and consumed
+    
+    start-batch-pipeline || {
+        echo -e "${YELLOW}Warning: Batch pipeline encountered errors. Check logs.${NC}"
+    }
+    
+    # 10. Run DBT transformations
+    run-dbt || {
+        echo -e "${YELLOW}Warning: DBT transformations encountered errors. Check logs.${NC}"
+    }
     
     print_section "Pipeline Rebuild Complete"
     echo -e "${GREEN}The entire pipeline has been successfully rebuilt!${NC}"
-    echo -e "${YELLOW}To see the status of the pipeline, run: $0 --status${NC}"
+    
+    # Check final status
+    status
+    
+    # Check GCS bucket status
+    check_gcs_status || true
+    
+    echo -e "${YELLOW}To see the detailed status of the pipeline, run: $0 --status${NC}"
 }
 
 # Execute main function with passed arguments

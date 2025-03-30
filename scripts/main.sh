@@ -32,6 +32,7 @@ echo "Loading Agricultural Data Pipeline modules..."
 
 # Array of module paths
 MODULES=(
+    "./scripts/streaming/functions.sh"
     "./scripts/spark/functions.sh"
     "./scripts/batch/functions.sh"
     "./scripts/dbt/functions.sh"
