@@ -154,7 +154,7 @@ echo "Waiting for Airflow to be ready..."
 sleep 30
 
 # Check if Airflow container is running
-check_container_running "agri_data_pipeline-airflow-webserver"
+check_container_running "airflow-airflow-webserver-1"
 
 # Fix the DAG errors
 section "5.1. Fixing Airflow DAGs"
@@ -616,6 +616,11 @@ verify $? "Spark containers started"
 # Check if Spark containers are running
 check_container_running "agri_data_pipeline-spark-master"
 check_container_running "agri_data_pipeline-spark-worker-1"
+
+# Copy batch pipeline code to Spark container
+echo "Copying batch pipeline code to Spark container..."
+docker cp ./batch_pipeline agri_data_pipeline-spark-master:/opt/bitnami/spark/
+docker cp ./gcp-creds.json agri_data_pipeline-spark-master:/opt/bitnami/spark/
 
 # Make a git commit at checkpoint
 git add .

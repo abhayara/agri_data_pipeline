@@ -11,11 +11,9 @@ import sys
 import logging
 
 # Import path for the consumer script
-streaming_path = os.path.dirname(os.path.abspath(__file__))
-if streaming_path not in sys.path:
-    sys.path.append(streaming_path)
+sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
 
-# Import the consumer script
+# Import the consumer function
 from data_consumer import consume_messages
 
 # Default arguments for the DAG
@@ -35,7 +33,7 @@ dag = DAG(
     'kafka_to_gcs_streaming',
     default_args=default_args,
     description='Consume data from Kafka and store in GCS',
-    schedule_interval=timedelta(minutes=30),  # Run every 30 minutes
+    schedule_interval=timedelta(minutes=5),  # Run every 5 minutes
     catchup=False,
     max_active_runs=1,
 )
@@ -44,6 +42,7 @@ dag = DAG(
 consume_task = PythonOperator(
     task_id='consume_from_kafka',
     python_callable=consume_messages,
+    provide_context=True,
     dag=dag,
 )
 

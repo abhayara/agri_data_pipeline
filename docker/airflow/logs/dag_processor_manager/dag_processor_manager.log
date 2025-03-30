@@ -3224,3 +3224,483 @@ File Path                                   PID  Runtime      # DAGs    # Errors
 [2025-03-30T09:47:35.029+0000] {manager.py:470} INFO - Exiting gracefully upon receiving signal 15
 [2025-03-30T09:47:38.264+0000] {manager.py:470} INFO - Exiting gracefully upon receiving signal 15
 [2025-03-30T09:47:39.924+0000] {manager.py:470} INFO - Exiting gracefully upon receiving signal 15
+[2025-03-30T09:54:12.574+0000] {manager.py:487} INFO - Processing files using up to 2 processes at a time 
+[2025-03-30T09:54:12.575+0000] {manager.py:488} INFO - Process each file at most once every 30 seconds
+[2025-03-30T09:54:12.576+0000] {manager.py:490} INFO - Checking for new files in /opt/airflow/dags every 300 seconds
+[2025-03-30T09:54:12.576+0000] {manager.py:758} INFO - Searching for files in /opt/airflow/dags
+[2025-03-30T09:54:12.583+0000] {manager.py:761} INFO - There are 3 files in /opt/airflow/dags
+[2025-03-30T09:54:12.597+0000] {manager.py:768} ERROR - Error removing old import errors
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/engine/base.py", line 3366, in _wrap_pool_connect
+    return fn()
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/pool/base.py", line 327, in connect
+    return _ConnectionFairy._checkout(self)
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/pool/base.py", line 894, in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/pool/base.py", line 493, in checkout
+    rec = pool._do_get()
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/pool/impl.py", line 146, in _do_get
+    self._dec_overflow()
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/util/langhelpers.py", line 72, in __exit__
+    with_traceback=exc_tb,
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/util/compat.py", line 211, in raise_
+    raise exception
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/pool/impl.py", line 143, in _do_get
+    return self._create_connection()
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/pool/base.py", line 273, in _create_connection
+    return _ConnectionRecord(self)
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/pool/base.py", line 388, in __init__
+    self.__connect()
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/pool/base.py", line 691, in __connect
+    pool.logger.debug("Error on connect(): %s", e)
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/util/langhelpers.py", line 72, in __exit__
+    with_traceback=exc_tb,
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/util/compat.py", line 211, in raise_
+    raise exception
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/pool/base.py", line 686, in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/engine/create.py", line 574, in connect
+    return dialect.connect(*cargs, **cparams)
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/engine/default.py", line 598, in connect
+    return self.dbapi.connect(*cargs, **cparams)
+  File "/home/airflow/.local/lib/python3.7/site-packages/psycopg2/__init__.py", line 122, in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+psycopg2.OperationalError: connection to server at "postgres" (172.27.0.7), port 5432 failed: FATAL:  database "airflow" does not exist
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.7/site-packages/airflow/dag_processing/manager.py", line 766, in _refresh_dag_dir
+    DagFileProcessorManager.clear_nonexistent_import_errors(file_paths=self._file_paths)
+  File "/home/airflow/.local/lib/python3.7/site-packages/airflow/api_internal/internal_api_call.py", line 112, in wrapper
+    return func(*args, **kwargs)
+  File "/home/airflow/.local/lib/python3.7/site-packages/airflow/utils/session.py", line 76, in wrapper
+    return func(*args, session=session, **kwargs)
+  File "/home/airflow/.local/lib/python3.7/site-packages/airflow/dag_processing/manager.py", line 823, in clear_nonexistent_import_errors
+    query.delete(synchronize_session="fetch")
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/orm/query.py", line 3225, in delete
+    execution_options={"synchronize_session": synchronize_session},
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/orm/session.py", line 1716, in execute
+    conn = self._connection_for_bind(bind)
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/orm/session.py", line 1556, in _connection_for_bind
+    engine, execution_options
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/orm/session.py", line 750, in _connection_for_bind
+    conn = bind.connect()
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/engine/base.py", line 3320, in connect
+    return self._connection_cls(self, close_with_result=close_with_result)
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/engine/base.py", line 96, in __init__
+    else engine.raw_connection()
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/engine/base.py", line 3399, in raw_connection
+    return self._wrap_pool_connect(self.pool.connect, _connection)
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/engine/base.py", line 3370, in _wrap_pool_connect
+    e, dialect, self
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/engine/base.py", line 2204, in _handle_dbapi_exception_noconnection
+    sqlalchemy_exception, with_traceback=exc_info[2], from_=e
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/util/compat.py", line 211, in raise_
+    raise exception
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/engine/base.py", line 3366, in _wrap_pool_connect
+    return fn()
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/pool/base.py", line 327, in connect
+    return _ConnectionFairy._checkout(self)
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/pool/base.py", line 894, in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/pool/base.py", line 493, in checkout
+    rec = pool._do_get()
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/pool/impl.py", line 146, in _do_get
+    self._dec_overflow()
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/util/langhelpers.py", line 72, in __exit__
+    with_traceback=exc_tb,
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/util/compat.py", line 211, in raise_
+    raise exception
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/pool/impl.py", line 143, in _do_get
+    return self._create_connection()
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/pool/base.py", line 273, in _create_connection
+    return _ConnectionRecord(self)
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/pool/base.py", line 388, in __init__
+    self.__connect()
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/pool/base.py", line 691, in __connect
+    pool.logger.debug("Error on connect(): %s", e)
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/util/langhelpers.py", line 72, in __exit__
+    with_traceback=exc_tb,
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/util/compat.py", line 211, in raise_
+    raise exception
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/pool/base.py", line 686, in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/engine/create.py", line 574, in connect
+    return dialect.connect(*cargs, **cparams)
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/engine/default.py", line 598, in connect
+    return self.dbapi.connect(*cargs, **cparams)
+  File "/home/airflow/.local/lib/python3.7/site-packages/psycopg2/__init__.py", line 122, in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+sqlalchemy.exc.OperationalError: (psycopg2.OperationalError) connection to server at "postgres" (172.27.0.7), port 5432 failed: FATAL:  database "airflow" does not exist
+
+(Background on this error at: https://sqlalche.me/e/14/e3q8)
+[2025-03-30T09:54:13.155+0000] {manager.py:487} INFO - Processing files using up to 2 processes at a time 
+[2025-03-30T09:54:13.155+0000] {manager.py:488} INFO - Process each file at most once every 30 seconds
+[2025-03-30T09:54:13.156+0000] {manager.py:490} INFO - Checking for new files in /opt/airflow/dags every 300 seconds
+[2025-03-30T09:54:13.156+0000] {manager.py:758} INFO - Searching for files in /opt/airflow/dags
+[2025-03-30T09:54:13.160+0000] {manager.py:761} INFO - There are 3 files in /opt/airflow/dags
+[2025-03-30T09:54:13.173+0000] {manager.py:768} ERROR - Error removing old import errors
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/engine/base.py", line 3366, in _wrap_pool_connect
+    return fn()
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/pool/base.py", line 327, in connect
+    return _ConnectionFairy._checkout(self)
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/pool/base.py", line 894, in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/pool/base.py", line 493, in checkout
+    rec = pool._do_get()
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/pool/impl.py", line 146, in _do_get
+    self._dec_overflow()
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/util/langhelpers.py", line 72, in __exit__
+    with_traceback=exc_tb,
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/util/compat.py", line 211, in raise_
+    raise exception
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/pool/impl.py", line 143, in _do_get
+    return self._create_connection()
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/pool/base.py", line 273, in _create_connection
+    return _ConnectionRecord(self)
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/pool/base.py", line 388, in __init__
+    self.__connect()
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/pool/base.py", line 691, in __connect
+    pool.logger.debug("Error on connect(): %s", e)
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/util/langhelpers.py", line 72, in __exit__
+    with_traceback=exc_tb,
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/util/compat.py", line 211, in raise_
+    raise exception
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/pool/base.py", line 686, in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/engine/create.py", line 574, in connect
+    return dialect.connect(*cargs, **cparams)
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/engine/default.py", line 598, in connect
+    return self.dbapi.connect(*cargs, **cparams)
+  File "/home/airflow/.local/lib/python3.7/site-packages/psycopg2/__init__.py", line 122, in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+psycopg2.OperationalError: connection to server at "postgres" (172.27.0.7), port 5432 failed: FATAL:  database "airflow" does not exist
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.7/site-packages/airflow/dag_processing/manager.py", line 766, in _refresh_dag_dir
+    DagFileProcessorManager.clear_nonexistent_import_errors(file_paths=self._file_paths)
+  File "/home/airflow/.local/lib/python3.7/site-packages/airflow/api_internal/internal_api_call.py", line 112, in wrapper
+    return func(*args, **kwargs)
+  File "/home/airflow/.local/lib/python3.7/site-packages/airflow/utils/session.py", line 76, in wrapper
+    return func(*args, session=session, **kwargs)
+  File "/home/airflow/.local/lib/python3.7/site-packages/airflow/dag_processing/manager.py", line 823, in clear_nonexistent_import_errors
+    query.delete(synchronize_session="fetch")
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/orm/query.py", line 3225, in delete
+    execution_options={"synchronize_session": synchronize_session},
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/orm/session.py", line 1716, in execute
+    conn = self._connection_for_bind(bind)
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/orm/session.py", line 1556, in _connection_for_bind
+    engine, execution_options
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/orm/session.py", line 750, in _connection_for_bind
+    conn = bind.connect()
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/engine/base.py", line 3320, in connect
+    return self._connection_cls(self, close_with_result=close_with_result)
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/engine/base.py", line 96, in __init__
+    else engine.raw_connection()
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/engine/base.py", line 3399, in raw_connection
+    return self._wrap_pool_connect(self.pool.connect, _connection)
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/engine/base.py", line 3370, in _wrap_pool_connect
+    e, dialect, self
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/engine/base.py", line 2204, in _handle_dbapi_exception_noconnection
+    sqlalchemy_exception, with_traceback=exc_info[2], from_=e
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/util/compat.py", line 211, in raise_
+    raise exception
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/engine/base.py", line 3366, in _wrap_pool_connect
+    return fn()
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/pool/base.py", line 327, in connect
+    return _ConnectionFairy._checkout(self)
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/pool/base.py", line 894, in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/pool/base.py", line 493, in checkout
+    rec = pool._do_get()
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/pool/impl.py", line 146, in _do_get
+    self._dec_overflow()
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/util/langhelpers.py", line 72, in __exit__
+    with_traceback=exc_tb,
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/util/compat.py", line 211, in raise_
+    raise exception
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/pool/impl.py", line 143, in _do_get
+    return self._create_connection()
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/pool/base.py", line 273, in _create_connection
+    return _ConnectionRecord(self)
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/pool/base.py", line 388, in __init__
+    self.__connect()
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/pool/base.py", line 691, in __connect
+    pool.logger.debug("Error on connect(): %s", e)
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/util/langhelpers.py", line 72, in __exit__
+    with_traceback=exc_tb,
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/util/compat.py", line 211, in raise_
+    raise exception
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/pool/base.py", line 686, in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/engine/create.py", line 574, in connect
+    return dialect.connect(*cargs, **cparams)
+  File "/home/airflow/.local/lib/python3.7/site-packages/sqlalchemy/engine/default.py", line 598, in connect
+    return self.dbapi.connect(*cargs, **cparams)
+  File "/home/airflow/.local/lib/python3.7/site-packages/psycopg2/__init__.py", line 122, in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+sqlalchemy.exc.OperationalError: (psycopg2.OperationalError) connection to server at "postgres" (172.27.0.7), port 5432 failed: FATAL:  database "airflow" does not exist
+
+(Background on this error at: https://sqlalche.me/e/14/e3q8)
+[2025-03-30T09:54:13.316+0000] {manager.py:889} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                   PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run
+----------------------------------------  -----  ---------  --------  ----------  --------------  ----------
+/opt/airflow/dags/gcs_to_bigquery_dag.py    220  0.07s             0           0
+/opt/airflow/dags/kafka_to_gcs_dag.py                              0           0
+/opt/airflow/dags/helpers/__init__.py       223  0.06s             0           0
+================================================================================
+[2025-03-30T09:54:18.553+0000] {manager.py:1024} ERROR - Processor for /opt/airflow/dags/helpers/__init__.py exited with return code 1.
+[2025-03-30T09:54:44.044+0000] {manager.py:889} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                 PID    Runtime      # DAGs    # Errors  Last Runtime    Last Run
+----------------------------------------  -----  ---------  --------  ----------  --------------  -------------------
+/opt/airflow/dags/kafka_to_gcs_dag.py                              0           1  0.27s           2025-03-30T09:54:18
+/opt/airflow/dags/helpers/__init__.py                              0          -1  5.31s           2025-03-30T09:54:18
+/opt/airflow/dags/gcs_to_bigquery_dag.py                           1           0  5.71s           2025-03-30T09:54:18
+================================================================================
+[2025-03-30T09:54:52.885+0000] {manager.py:1024} ERROR - Processor for /opt/airflow/dags/helpers/__init__.py exited with return code 1.
+[2025-03-30T09:54:57.683+0000] {manager.py:1024} ERROR - Processor for /opt/airflow/dags/helpers/__init__.py exited with return code 1.
+[2025-03-30T09:55:14.237+0000] {manager.py:889} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                 PID    Runtime      # DAGs    # Errors  Last Runtime    Last Run
+----------------------------------------  -----  ---------  --------  ----------  --------------  -------------------
+/opt/airflow/dags/kafka_to_gcs_dag.py                              0           1  0.19s           2025-03-30T09:54:53
+/opt/airflow/dags/helpers/__init__.py                              0          -1  1.61s           2025-03-30T09:54:57
+/opt/airflow/dags/gcs_to_bigquery_dag.py                           1           0  3.95s           2025-03-30T09:54:53
+================================================================================
+[2025-03-30T09:55:23.422+0000] {manager.py:1024} ERROR - Processor for /opt/airflow/dags/kafka_to_gcs_dag.py exited with return code 1.
+[2025-03-30T09:55:30.022+0000] {manager.py:1024} ERROR - Processor for /opt/airflow/dags/helpers/__init__.py exited with return code 1.
+[2025-03-30T09:55:44.646+0000] {manager.py:889} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                 PID    Runtime      # DAGs    # Errors  Last Runtime    Last Run
+----------------------------------------  -----  ---------  --------  ----------  --------------  -------------------
+/opt/airflow/dags/kafka_to_gcs_dag.py                              0          -1  0.12s           2025-03-30T09:55:23
+/opt/airflow/dags/helpers/__init__.py                              0          -1  1.62s           2025-03-30T09:55:30
+/opt/airflow/dags/gcs_to_bigquery_dag.py                           1           0  1.50s           2025-03-30T09:55:17
+================================================================================
+[2025-03-30T09:56:14.837+0000] {manager.py:889} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                 PID    Runtime      # DAGs    # Errors  Last Runtime    Last Run
+----------------------------------------  -----  ---------  --------  ----------  --------------  -------------------
+/opt/airflow/dags/kafka_to_gcs_dag.py                              0           1  0.12s           2025-03-30T09:55:53
+/opt/airflow/dags/helpers/__init__.py                              0           0  4.11s           2025-03-30T09:56:04
+/opt/airflow/dags/gcs_to_bigquery_dag.py                           1           0  3.88s           2025-03-30T09:55:51
+================================================================================
+[2025-03-30T09:56:15.966+0000] {manager.py:1024} ERROR - Processor for /opt/airflow/dags/kafka_to_gcs_dag.py exited with return code 1.
+[2025-03-30T09:56:45.386+0000] {manager.py:889} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                   PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run
+----------------------------------------  -----  ---------  --------  ----------  --------------  -------------------
+/opt/airflow/dags/kafka_to_gcs_dag.py                              0          -1  0.12s           2025-03-30T09:56:15
+/opt/airflow/dags/helpers/__init__.py       382  9.90s             0           0  4.11s           2025-03-30T09:56:04
+/opt/airflow/dags/gcs_to_bigquery_dag.py                           1           0  16.35s          2025-03-30T09:56:38
+================================================================================
+[2025-03-30T09:57:15.937+0000] {manager.py:889} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                   PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run
+----------------------------------------  -----  ---------  --------  ----------  --------------  -------------------
+/opt/airflow/dags/kafka_to_gcs_dag.py                              0           1  1.70s           2025-03-30T09:56:48
+/opt/airflow/dags/helpers/__init__.py                              0           0  22.20s          2025-03-30T09:56:57
+/opt/airflow/dags/gcs_to_bigquery_dag.py    414  7.28s             1           0  16.35s          2025-03-30T09:56:38
+================================================================================
+[2025-03-30T09:57:18.857+0000] {manager.py:1024} ERROR - Processor for /opt/airflow/dags/kafka_to_gcs_dag.py exited with return code 1.
+[2025-03-30T09:57:22.336+0000] {manager.py:1024} ERROR - Processor for /opt/airflow/dags/gcs_to_bigquery_dag.py exited with return code 1.
+[2025-03-30T09:57:46.682+0000] {manager.py:889} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                 PID    Runtime      # DAGs    # Errors  Last Runtime    Last Run
+----------------------------------------  -----  ---------  --------  ----------  --------------  -------------------
+/opt/airflow/dags/gcs_to_bigquery_dag.py                           0          -1  13.68s          2025-03-30T09:57:22
+/opt/airflow/dags/kafka_to_gcs_dag.py                              0          -1  0.57s           2025-03-30T09:57:18
+/opt/airflow/dags/helpers/__init__.py                              0           0  6.61s           2025-03-30T09:57:34
+================================================================================
+[2025-03-30T09:58:17.220+0000] {manager.py:889} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                 PID    Runtime      # DAGs    # Errors  Last Runtime    Last Run
+----------------------------------------  -----  ---------  --------  ----------  --------------  -------------------
+/opt/airflow/dags/kafka_to_gcs_dag.py                              0           1  0.20s           2025-03-30T09:57:49
+/opt/airflow/dags/helpers/__init__.py                              0           0  2.44s           2025-03-30T09:58:07
+/opt/airflow/dags/gcs_to_bigquery_dag.py                           1           0  2.64s           2025-03-30T09:57:55
+================================================================================
+[2025-03-30T09:58:47.355+0000] {manager.py:889} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                 PID    Runtime      # DAGs    # Errors  Last Runtime    Last Run
+----------------------------------------  -----  ---------  --------  ----------  --------------  -------------------
+/opt/airflow/dags/kafka_to_gcs_dag.py                              0           1  0.27s           2025-03-30T09:58:20
+/opt/airflow/dags/helpers/__init__.py                              0           0  4.83s           2025-03-30T09:58:42
+/opt/airflow/dags/gcs_to_bigquery_dag.py                           1           0  2.44s           2025-03-30T09:58:28
+================================================================================
+[2025-03-30T09:58:50.846+0000] {manager.py:1024} ERROR - Processor for /opt/airflow/dags/kafka_to_gcs_dag.py exited with return code 1.
+[2025-03-30T09:59:13.175+0000] {manager.py:758} INFO - Searching for files in /opt/airflow/dags
+[2025-03-30T09:59:13.190+0000] {manager.py:761} INFO - There are 3 files in /opt/airflow/dags
+[2025-03-30T09:59:17.654+0000] {manager.py:889} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                 PID    Runtime      # DAGs    # Errors  Last Runtime    Last Run
+----------------------------------------  -----  ---------  --------  ----------  --------------  -------------------
+/opt/airflow/dags/kafka_to_gcs_dag.py                              0          -1  0.23s           2025-03-30T09:58:50
+/opt/airflow/dags/helpers/__init__.py                              0           0  3.19s           2025-03-30T09:59:15
+/opt/airflow/dags/gcs_to_bigquery_dag.py                           1           0  5.73s           2025-03-30T09:59:04
+================================================================================
+[2025-03-30T09:59:21.783+0000] {manager.py:1024} ERROR - Processor for /opt/airflow/dags/kafka_to_gcs_dag.py exited with return code 1.
+[2025-03-30T09:59:48.155+0000] {manager.py:889} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                   PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run
+----------------------------------------  -----  ---------  --------  ----------  --------------  -------------------
+/opt/airflow/dags/kafka_to_gcs_dag.py                              0          -1  0.09s           2025-03-30T09:59:21
+/opt/airflow/dags/helpers/__init__.py       573  2.04s             0           0  3.19s           2025-03-30T09:59:15
+/opt/airflow/dags/gcs_to_bigquery_dag.py                           1           0  6.53s           2025-03-30T09:59:41
+================================================================================
+[2025-03-30T09:59:48.615+0000] {manager.py:1024} ERROR - Processor for /opt/airflow/dags/helpers/__init__.py exited with return code 1.
+[2025-03-30T10:00:18.683+0000] {manager.py:889} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                   PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run
+----------------------------------------  -----  ---------  --------  ----------  --------------  -------------------
+/opt/airflow/dags/kafka_to_gcs_dag.py                              0           1  0.40s           2025-03-30T09:59:52
+/opt/airflow/dags/helpers/__init__.py       610  0.01s             0          -1  2.50s           2025-03-30T09:59:48
+/opt/airflow/dags/gcs_to_bigquery_dag.py                           1           0  1.83s           2025-03-30T10:00:13
+================================================================================
+[2025-03-30T10:00:19.803+0000] {manager.py:1024} ERROR - Processor for /opt/airflow/dags/helpers/__init__.py exited with return code 1.
+[2025-03-30T10:00:49.048+0000] {manager.py:889} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                 PID    Runtime      # DAGs    # Errors  Last Runtime    Last Run
+----------------------------------------  -----  ---------  --------  ----------  --------------  -------------------
+/opt/airflow/dags/kafka_to_gcs_dag.py                              0           1  0.16s           2025-03-30T10:00:23
+/opt/airflow/dags/helpers/__init__.py                              0          -1  1.13s           2025-03-30T10:00:19
+/opt/airflow/dags/gcs_to_bigquery_dag.py                           1           0  1.41s           2025-03-30T10:00:45
+================================================================================
+[2025-03-30T10:00:52.053+0000] {manager.py:1024} ERROR - Processor for /opt/airflow/dags/helpers/__init__.py exited with return code 1.
+[2025-03-30T10:01:19.306+0000] {manager.py:889} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                 PID    Runtime      # DAGs    # Errors  Last Runtime    Last Run
+----------------------------------------  -----  ---------  --------  ----------  --------------  -------------------
+/opt/airflow/dags/kafka_to_gcs_dag.py                              0           1  0.38s           2025-03-30T10:00:54
+/opt/airflow/dags/helpers/__init__.py                              0          -1  1.99s           2025-03-30T10:00:52
+/opt/airflow/dags/gcs_to_bigquery_dag.py                           1           0  1.70s           2025-03-30T10:01:17
+================================================================================
+[2025-03-30T10:01:24.698+0000] {manager.py:1024} ERROR - Processor for /opt/airflow/dags/kafka_to_gcs_dag.py exited with return code 1.
+[2025-03-30T10:01:49.739+0000] {manager.py:889} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                   PID  Runtime      # DAGs    # Errors  Last Runtime    Last Run
+----------------------------------------  -----  ---------  --------  ----------  --------------  -------------------
+/opt/airflow/dags/kafka_to_gcs_dag.py                              0          -1  0.22s           2025-03-30T10:01:24
+/opt/airflow/dags/helpers/__init__.py                              0           0  2.00s           2025-03-30T10:01:24
+/opt/airflow/dags/gcs_to_bigquery_dag.py    713  2.06s             1           0  1.70s           2025-03-30T10:01:17
+================================================================================
+[2025-03-30T10:01:56.179+0000] {manager.py:1024} ERROR - Processor for /opt/airflow/dags/helpers/__init__.py exited with return code 1.
+[2025-03-30T10:02:20.516+0000] {manager.py:889} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                 PID    Runtime      # DAGs    # Errors  Last Runtime    Last Run
+----------------------------------------  -----  ---------  --------  ----------  --------------  -------------------
+/opt/airflow/dags/kafka_to_gcs_dag.py                              0           1  0.14s           2025-03-30T10:01:55
+/opt/airflow/dags/helpers/__init__.py                              0          -1  1.23s           2025-03-30T10:01:56
+/opt/airflow/dags/gcs_to_bigquery_dag.py                           1           0  3.53s           2025-03-30T10:01:51
+================================================================================
+[2025-03-30T10:02:26.025+0000] {manager.py:1024} ERROR - Processor for /opt/airflow/dags/kafka_to_gcs_dag.py exited with return code 1.
+[2025-03-30T10:02:51.137+0000] {manager.py:889} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                 PID    Runtime      # DAGs    # Errors  Last Runtime    Last Run
+----------------------------------------  -----  ---------  --------  ----------  --------------  -------------------
+/opt/airflow/dags/kafka_to_gcs_dag.py                              0          -1  0.37s           2025-03-30T10:02:26
+/opt/airflow/dags/helpers/__init__.py                              0           0  6.33s           2025-03-30T10:02:33
+/opt/airflow/dags/gcs_to_bigquery_dag.py                           1           0  8.32s           2025-03-30T10:02:29
+================================================================================
+[2025-03-30T10:03:21.537+0000] {manager.py:889} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                 PID    Runtime      # DAGs    # Errors  Last Runtime    Last Run
+----------------------------------------  -----  ---------  --------  ----------  --------------  -------------------
+/opt/airflow/dags/kafka_to_gcs_dag.py                              0           1  0.10s           2025-03-30T10:02:56
+/opt/airflow/dags/helpers/__init__.py                              0           0  1.56s           2025-03-30T10:03:04
+/opt/airflow/dags/gcs_to_bigquery_dag.py                           1           0  2.02s           2025-03-30T10:03:02
+================================================================================
+[2025-03-30T10:03:26.958+0000] {manager.py:1024} ERROR - Processor for /opt/airflow/dags/kafka_to_gcs_dag.py exited with return code 1.
+[2025-03-30T10:03:52.153+0000] {manager.py:889} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                 PID    Runtime      # DAGs    # Errors  Last Runtime    Last Run
+----------------------------------------  -----  ---------  --------  ----------  --------------  -------------------
+/opt/airflow/dags/kafka_to_gcs_dag.py                              0          -1  0.31s           2025-03-30T10:03:26
+/opt/airflow/dags/helpers/__init__.py                              0           0  4.09s           2025-03-30T10:03:39
+/opt/airflow/dags/gcs_to_bigquery_dag.py                           1           0  4.32s           2025-03-30T10:03:37
+================================================================================
+[2025-03-30T10:04:09.763+0000] {manager.py:1024} ERROR - Processor for /opt/airflow/dags/gcs_to_bigquery_dag.py exited with return code 1.
+[2025-03-30T10:04:13.216+0000] {manager.py:758} INFO - Searching for files in /opt/airflow/dags
+[2025-03-30T10:04:13.243+0000] {manager.py:761} INFO - There are 3 files in /opt/airflow/dags
+[2025-03-30T10:04:22.356+0000] {manager.py:889} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                 PID    Runtime      # DAGs    # Errors  Last Runtime    Last Run
+----------------------------------------  -----  ---------  --------  ----------  --------------  -------------------
+/opt/airflow/dags/gcs_to_bigquery_dag.py                           0          -1  2.38s           2025-03-30T10:04:09
+/opt/airflow/dags/kafka_to_gcs_dag.py                              0           1  0.14s           2025-03-30T10:03:57
+/opt/airflow/dags/helpers/__init__.py                              0           0  1.78s           2025-03-30T10:04:11
+================================================================================
+[2025-03-30T10:04:43.153+0000] {manager.py:1024} ERROR - Processor for /opt/airflow/dags/helpers/__init__.py exited with return code 1.
+[2025-03-30T10:04:52.804+0000] {manager.py:889} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                 PID    Runtime      # DAGs    # Errors  Last Runtime    Last Run
+----------------------------------------  -----  ---------  --------  ----------  --------------  -------------------
+/opt/airflow/dags/kafka_to_gcs_dag.py                              0           1  0.25s           2025-03-30T10:04:27
+/opt/airflow/dags/helpers/__init__.py                              0          -1  1.63s           2025-03-30T10:04:43
+/opt/airflow/dags/gcs_to_bigquery_dag.py                           1           0  2.24s           2025-03-30T10:04:42
+================================================================================
+[2025-03-30T10:04:57.994+0000] {manager.py:1024} ERROR - Processor for /opt/airflow/dags/kafka_to_gcs_dag.py exited with return code 1.
+[2025-03-30T10:05:23.176+0000] {manager.py:889} INFO - 
+================================================================================
+DAG File Processing Stats
+
+File Path                                 PID    Runtime      # DAGs    # Errors  Last Runtime    Last Run
+----------------------------------------  -----  ---------  --------  ----------  --------------  -------------------
+/opt/airflow/dags/kafka_to_gcs_dag.py                              0          -1  0.15s           2025-03-30T10:04:57
+/opt/airflow/dags/helpers/__init__.py                              0           0  2.28s           2025-03-30T10:05:16
+/opt/airflow/dags/gcs_to_bigquery_dag.py                           1           0  2.90s           2025-03-30T10:05:15
+================================================================================
+[2025-03-30T10:05:51.679+0000] {manager.py:1024} ERROR - Processor for /opt/airflow/dags/gcs_to_bigquery_dag.py exited with return code 1.
+[2025-03-30T10:05:52.184+0000] {manager.py:470} INFO - Exiting gracefully upon receiving signal 15
