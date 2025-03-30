@@ -69,7 +69,7 @@ check-airflow-status() {
     print_section "Checking Airflow status..."
     
     # Check if containers are running
-    local airflow_containers=$(docker ps --filter "name=agri_data_pipeline-airflow" --format "{{.Names}}: {{.Status}}")
+    local airflow_containers=$(docker ps --filter "name=airflow" --format "{{.Names}}: {{.Status}}")
     
     if [ -z "$airflow_containers" ]; then
         echo -e "${RED}❌ No Airflow containers are running.${NC}"
@@ -90,7 +90,7 @@ check-airflow-status() {
         
         # List DAGs
         echo -e "${YELLOW}Listing Airflow DAGs:${NC}"
-        docker exec -it agri_data_pipeline-airflow-webserver airflow dags list 2>/dev/null || echo -e "${RED}Failed to list DAGs${NC}"
+        docker exec -it airflow-airflow-webserver-1 airflow dags list 2>/dev/null || echo -e "${RED}Failed to list DAGs${NC}"
     fi
     
     return 0
@@ -109,13 +109,13 @@ trigger-dag() {
     print_section "Triggering DAG run: $dag_id"
     
     # Check if DAG exists
-    if ! docker exec -it agri_data_pipeline-airflow-webserver airflow dags list | grep -q "$dag_id"; then
+    if ! docker exec -it airflow-airflow-webserver-1 airflow dags list | grep -q "$dag_id"; then
         echo -e "${RED}Error: DAG '$dag_id' not found.${NC}"
         return 1
     fi
     
     # Trigger the DAG
-    docker exec -it agri_data_pipeline-airflow-webserver airflow dags trigger "$dag_id"
+    docker exec -it airflow-airflow-webserver-1 airflow dags trigger "$dag_id"
     
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}✅ DAG '$dag_id' triggered successfully.${NC}"
