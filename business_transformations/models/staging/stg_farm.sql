@@ -1,12 +1,11 @@
-{{ config(
-    materialized = 'view'
-)}}
+with source as (
+    select * from {{ ref('seed_farm') }}
+)
 
-SELECT
+select
     farm_id,
     farm_name,
-    location,
-    size_hectares,
-    established_date,
-    CURRENT_TIMESTAMP() as dbt_updated_at
-FROM {{ source('agri_data', 'dim_farm') }} 
+    farm_location as location,
+    farm_size as size_hectares,
+    established_date
+from source 

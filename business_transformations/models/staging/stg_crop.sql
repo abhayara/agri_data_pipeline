@@ -1,12 +1,11 @@
-{{ config(
-    materialized = 'view'
-)}}
+with source as (
+    select * from {{ ref('seed_crop') }}
+)
 
-SELECT
+select
     crop_id,
     crop_name,
     crop_type,
     growing_season,
-    water_needs,
-    CURRENT_TIMESTAMP() as dbt_updated_at
-FROM {{ source('agri_data', 'dim_crop') }} 
+    water_needs
+from source 

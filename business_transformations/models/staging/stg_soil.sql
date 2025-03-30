@@ -1,13 +1,12 @@
-{{ config(
-    materialized = 'view'
-)}}
+with source as (
+    select * from {{ ref('seed_soil') }}
+)
 
-SELECT
+select
     soil_id,
     farm_id,
     ph_level,
     nutrient_content,
     texture,
-    organic_matter,
-    CURRENT_TIMESTAMP() as dbt_updated_at
-FROM {{ source('agri_data', 'dim_soil') }} 
+    organic_matter
+from source 

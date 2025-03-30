@@ -1,54 +1,68 @@
-{{ config(
-    materialized = 'table'
-)}}
+with farm_data as (
+    select * from {{ ref('stg_farm') }}
+),
 
-WITH farm_production AS (
-    SELECT
+production_data as (
+    select * from {{ ref('stg_production') }}
+),
+
+yield_data as (
+    select * from {{ ref('stg_yield') }}
+),
+
+sustainability_data as (
+    select * from {{ ref('stg_sustainability') }}
+),
+
+farm_production as (
+    select
         f.farm_id,
         f.farm_name,
-        SUM(p.quantity_produced) AS total_production,
-        SUM(p.cost) AS total_cost
-    FROM {{ ref('stg_farm') }} f
-    LEFT JOIN {{ ref('stg_production') }} p ON f.farm_id = p.farm_id
-    GROUP BY f.farm_id, f.farm_name
+        sum(p.quantity_produced) as total_production,
+        sum(p.cost) as total_cost
+    from farm_data f
+    left join production_data p on f.farm_id = p.farm_id
+    group by 1, 2
 ),
 
-farm_yield AS (
-    SELECT
+farm_yield as (
+    select
         f.farm_id,
-        AVG(y.yield_per_hectare) AS average_yield
-    FROM {{ ref('stg_farm') }} f
-    LEFT JOIN {{ ref('stg_yield') }} y ON f.farm_id = y.farm_id
-    GROUP BY f.farm_id
+        avg(y.yield_per_hectare) as average_yield
+    from farm_data f
+    left join yield_data y on f.farm_id = y.farm_id
+    group by 1
 ),
 
-farm_sustainability AS (
-    -- This would be a more complex calculation in a real scenario
-    -- Simplified for demonstration purposes
-    SELECT
-        farm_id,
-        -- Create a simple sustainability score based on water, carbon, and pesticide usage
-        -- In a real scenario, this would involve more complex calculations
-        CASE
-            WHEN farm_id % 3 = 0 THEN 'High'
-            WHEN farm_id % 3 = 1 THEN 'Medium'
-            ELSE 'Low'
-        END AS sustainability_level
-    FROM {{ ref('stg_farm') }}
+farm_sustainability as (
+    select
+        f.farm_id,
+        avg(s.water_usage / nullif(p.quantity_produced, 0)) as water_efficiency,
+        avg(s.carbon_footprint / nullif(p.quantity_produced, 0)) as carbon_efficiency,
+        avg(s.pesticide_usage / nullif(p.quantity_produced, 0)) as pesticide_efficiency,
+        (
+            10 - (
+                coalesce(avg(s.water_usage / nullif(p.quantity_produced, 0)), 0) * 2 +
+                coalesce(avg(s.carbon_footprint / nullif(p.quantity_produced, 0)), 0) * 2 +
+                coalesce(avg(s.pesticide_usage / nullif(p.quantity_produced, 0)), 0) * 2
+            ) / 3
+        ) as sustainability_score
+    from farm_data f
+    left join sustainability_data s on f.farm_id = s.farm_id
+    left join production_data p on f.farm_id = p.farm_id and p.date = s.date
+    group by 1
 )
 
-SELECT
+select
     fp.farm_id,
     fp.farm_name,
     fp.total_production,
     fy.average_yield,
-    CASE
-        WHEN fs.sustainability_level = 'High' THEN 3
-        WHEN fs.sustainability_level = 'Medium' THEN 2
-        ELSE 1
-    END AS sustainability_score,
-    SAFE_DIVIDE(fp.total_production, fp.total_cost) AS production_efficiency,
-    CURRENT_TIMESTAMP() AS dbt_updated_at
-FROM farm_production fp
-JOIN farm_yield fy ON fp.farm_id = fy.farm_id
-JOIN farm_sustainability fs ON fp.farm_id = fs.farm_id 
+    fs.sustainability_score,
+    case 
+        when fp.total_cost = 0 then 0
+        else fp.total_production / nullif(fp.total_cost, 0)
+    end as production_efficiency
+from farm_production fp
+left join farm_yield fy on fp.farm_id = fy.farm_id
+left join farm_sustainability fs on fp.farm_id = fs.farm_id 

@@ -4,22 +4,11 @@ This dbt (Data Build Tool) project handles business transformations for the agri
 
 ## Project Structure
 
-- `models/`: Contains SQL transformation models
-  - `staging/`: Initial transformations that clean and prepare source data
-  - `core/`: Business-level transformations that power analytics
-- `macros/`: Reusable SQL snippets and functions
-- `analyses/`: Ad-hoc analytical queries
-- `tests/`: Data tests to ensure data quality
-- `seeds/`: Static data files
-- `snapshots/`: Point-in-time snapshots of data
+
 
 ## Data Flow
 
-1. Raw agricultural data is collected from various sources through streaming pipeline
-2. Data is processed by the batch pipeline and loaded into BigQuery tables
-3. DBT models transform this data into analytical models in the following layers:
-   - **Staging models**: Clean and standardize source data
-   - **Core models**: Business-level transformations for analytics
+
 
 ## Getting Started
 
@@ -31,30 +20,10 @@ This dbt (Data Build Tool) project handles business transformations for the agri
 
 ### Setup
 
-1. Clone this repository
-2. Navigate to the `business_transformations` directory
-3. Configure your BigQuery credentials in `profiles.yml`
 
 ### Running dbt
 
-```bash
-# Navigate to the business_transformations directory
-cd business_transformations
 
-# Run all models
-dbt run
-
-# Run specific models
-dbt run --select staging.dim_farm
-dbt run --select core.farm_analytics
-
-# Test your data
-dbt test
-
-# Generate documentation
-dbt docs generate
-dbt docs serve
-```
 
 ## Available Models
 

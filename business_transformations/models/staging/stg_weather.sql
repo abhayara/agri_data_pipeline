@@ -1,13 +1,12 @@
-{{ config(
-    materialized = 'view'
-)}}
+with source as (
+    select * from {{ ref('seed_weather') }}
+)
 
-SELECT
+select
     weather_id,
     date,
     location,
     temperature,
     precipitation,
-    humidity,
-    CURRENT_TIMESTAMP() as dbt_updated_at
-FROM {{ source('agri_data', 'dim_weather') }} 
+    humidity
+from source 
