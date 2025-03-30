@@ -165,10 +165,10 @@ create-dag() {
     print_section "Creating DAG: $dag_name"
     
     # Create the DAG directory
-    mkdir -p ./airflow/dags
+    mkdir -p ./docker/airflow/dags
     
     # Create the DAG file
-    cat > ./airflow/dags/${dag_name}.py << EOF
+    cat > ./docker/airflow/dags/${dag_name}.py << EOF
 """
 ${dag_name}
 DAG for the agriculture data pipeline
@@ -215,11 +215,18 @@ with DAG(
 EOF
     
     if [ $? -eq 0 ]; then
-        echo -e "${GREEN}✅ Created DAG file: ./airflow/dags/${dag_name}.py${NC}"
+        echo -e "${GREEN}✅ Created DAG file: ./docker/airflow/dags/${dag_name}.py${NC}"
     else
         echo -e "${RED}Failed to create DAG file${NC}"
         return 1
     fi
     
     return 0
+}
+
+# Define the print_section function here to avoid the command not found error
+print_section() {
+    echo -e "\n${BLUE}===========================================================${NC}"
+    echo -e "${BLUE}$1${NC}"
+    echo -e "${BLUE}===========================================================${NC}"
 } 
