@@ -1,0 +1,14 @@
+version: "1"
+context:
+  active-host: "oe876.us1.dbt.com"
+  active-project: "70471823454215"
+projects:
+  - project-name: "agri_data_pipeline"
+    project-id: "70471823454215"
+    account-name: "NA"
+    account-id: "70471823430821"
+    account-host: "oe876.us1.dbt.com"
+    token-name: "cloud-cli-7ffe"
+    token-value: "dbtu_rJoz0oYliA_jwmP353qkj69Koaapk5ObhMle9phEMLjgAWUCLE"
+
+

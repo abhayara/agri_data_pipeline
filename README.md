@@ -1,79 +1,122 @@
 # Agricultural Data Pipeline
 
-This project implements a comprehensive data pipeline for agricultural data processing, using both streaming and batch processing approaches.
+A simplified data pipeline for processing agricultural data, using both streaming and batch processing approaches.
 
-## Architecture Overview
+## Overview
 
-The pipeline consists of the following services:
+This project implements a data pipeline for agricultural data processing that:
 
-- **Kafka**: For data streaming (Broker, Zookeeper, Schema Registry, Control Center, and REST API)
-- **Postgres**: For data storage and metadata
-- **Airflow**: For workflow orchestration
-- **Spark**: For data processing
-- **Metabase**: For data visualization
+1. Generates synthetic agricultural data
+2. Streams the data through Kafka
+3. Stores raw data in Google Cloud Storage
+4. Processes data using PySpark for ETL operations
+5. Loads transformed data into BigQuery for analysis
 
-## Recent Improvements
+## Architecture
 
-### 1. Centralized Environment Variables
+![Architecture Diagram](images/architecture.png)
 
-- Created a central `.env` file to manage environment variables
-- Updated `start_docker.sh` to check for `.env` file and load variables
-- Standardized environment variable usage across all services
+### Components:
 
-### 2. Robust Retry Mechanisms and Error Handling
+1. **Streaming Pipeline**
+   - **Producer**: Generates synthetic agricultural data (farm, crop, weather, etc.)
+   - **Consumer**: Consumes data from Kafka and stores in GCS
 
-- Implemented comprehensive retry mechanisms in Airflow DAGs
-- Added `tenacity` for exponential backoff in critical operations
-- Enhanced logging and error tracking
-- Added graceful shutdown capability to streaming components
+2. **Batch Pipeline**
+   - **Spark ETL**: Transforms raw data into dimension and fact tables
+   - **BigQuery Loader**: Loads transformed data into BigQuery
 
-### 3. Health Checks for All Services
+## Getting Started
 
-- Added health checks for all Docker services to ensure proper startup order
-- Implemented dependency checks in Airflow DAGs to verify external services
-- Added service dependency validation to prevent cascading failures
+### Prerequisites
 
-### 4. Improved Error Handling in Data Processing
+- Docker and Docker Compose
+- Python 3.8+
+- GCP Account (for GCS and BigQuery)
 
-- Enhanced error handling in Kafka producers and consumers
-- Implemented batch processing with proper error recovery
-- Added transaction support and validation for data integrity
-- Improved logging across all components
+### Setup
 
-### 5. Service Dependencies
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/yourusername/agri_data_pipeline.git
+   cd agri_data_pipeline
+   ```
 
-- Used Docker Compose's `depends_on` feature with health checks
-- Ensured proper service startup order
-- Prevented services from starting before dependencies are ready
+2. Create environment file:
+   ```bash
+   cp .env.example .env
+   ```
 
-## Quick Start
+3. Update the `.env` file with your GCP credentials and other configurations.
 
-1. Copy `.env.example` to `.env` and configure environment variables
-2. Run `./docker/start_docker.sh` to start the services
-3. Access services:
-   - Airflow: http://localhost:8080
-   - Spark Master: http://localhost:8080 (alternate port may be configured)
-   - Kafka Control Center: http://localhost:9021
-   - Metabase: http://localhost:3000
-   - PgAdmin: http://localhost:80
+4. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-## Data Flow
+### Running the Pipeline
 
-### Streaming Pipeline
-1. Kafka producer generates synthetic agricultural data
-2. Kafka consumer processes and stores data in GCS
-3. Airflow DAG loads data into BigQuery
+#### Start Streaming Pipeline
 
-### Batch Pipeline
-1. Spark reads raw data from GCS
-2. Spark transforms and processes data
-3. Airflow DAG loads transformed data into BigQuery
+```bash
+# Start the producer to generate data
+python streaming_pipeline/producer.py
+
+# Start the consumer to store data in GCS
+python streaming_pipeline/consumer.py
+```
+
+#### Run Batch Pipeline
+
+```bash
+# Run the ETL pipeline
+python batch_pipeline/export_to_gcs/pipeline.py
+```
+
+## Data Model
+
+The data model includes these main entities:
+
+- **Farm Dimension**: Information about farms
+- **Crop Dimension**: Information about crops
+- **Weather Dimension**: Weather conditions
+- **Soil Dimension**: Soil characteristics
+- **Yield Facts**: Crop yield metrics
+- **Sustainability Facts**: Environmental metrics
+
+## File Structure
+
+```
+agri_data_pipeline/
+├── streaming_pipeline/        # Kafka streaming components
+│   ├── producer.py            # Data generator and Kafka producer
+│   ├── consumer.py            # Kafka consumer to GCS
+│   └── config.py              # Streaming pipeline configuration
+│
+├── batch_pipeline/            # Batch processing components
+│   ├── export_to_gcs/         # PySpark ETL pipeline
+│   │   ├── pipeline.py        # Main ETL pipeline
+│   │   ├── config.py          # Pipeline configuration
+│   │   └── utils.py           # Utility functions
+│   │
+│   └── export_to_big_query/   # BigQuery loading components
+│
+├── docker/                    # Docker configuration
+├── .env.example               # Environment variables template
+└── requirements.txt           # Python dependencies
+```
 
 ## Troubleshooting
 
-Common issues and their solutions:
+- **Connection Issues**: Ensure all services are running correctly and check the `.env` file for proper configuration
+- **Version Compatibility**: The project uses compatible versions of all dependencies to avoid conflicts
+- **GCP Authentication**: Make sure you have valid GCP credentials and permissions
 
-- **Port conflicts**: Check for services using the same ports
-- **Kafka connection issues**: Ensure Zookeeper is properly initialized
-- **Missing environment variables**: Check your `.env` file configuration
-- **GCP credential errors**: Verify that `gcp-creds.json` is properly mounted 
+## Dependencies
+
+- PySpark 3.1.3
+- Confluent Kafka 2.0.2
+- Google Cloud Storage 2.7.0
+- Google Cloud BigQuery 3.3.5
+- Pandas 1.5.3
+- Python-dotenv 0.21.1 

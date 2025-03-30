@@ -3,51 +3,74 @@ Utility functions for the agricultural data batch pipeline.
 """
 
 import os
+import sys
 from pyspark.sql import SparkSession
-from pyspark.conf import SparkConf
-from pyspark.context import SparkContext
+from google.cloud import storage
+from dotenv import load_dotenv
+import config
+
+# Load environment variables
+load_dotenv()
 
 def setup_spark_with_gcs_connector():
     """
-    Set up and configure a Spark session with GCS connector.
-    
-    Returns:
-        SparkSession: A configured Spark session
+    Set up a Spark session with the necessary configurations for GCS connectivity.
     """
-    # Get credentials path
-    credentials_path = os.getenv('GOOGLE_APPLICATION_CREDENTIALS', './gcp-creds.json')
-    
-    # Path to the GCS connector jar file
-    jar_file_path = "./docker/spark/jar_files/gcs-connector-hadoop3-2.2.5.jar"
-    
-    # Project ID
+    # Get GCP configuration from environment
     project_id = os.getenv('GCP_PROJECT_ID', 'agri-data-454414')
     
-    # Spark configuration
-    conf = SparkConf() \
-        .setMaster('local[*]') \
-        .setAppName('AgriDataTransformation') \
-        .set("spark.jars", jar_file_path) \
-        .set("spark.hadoop.google.cloud.auth.service.account.enable", "true") \
-        .set("spark.hadoop.google.cloud.auth.service.account.json.keyfile", credentials_path) \
-        .set("spark.hadoop.google.cloud.project.id", project_id)
-    
-    # Create Spark Context
-    sc = SparkContext(conf=conf)
-    
-    # Hadoop configuration for GCS access
-    hadoop_conf = sc._jsc.hadoopConfiguration()
-    hadoop_conf.set("fs.AbstractFileSystem.gs.impl", "com.google.cloud.hadoop.fs.gcs.GoogleHadoopFS")
-    hadoop_conf.set("fs.gs.impl", "com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystem")
-    hadoop_conf.set("fs.gs.auth.service.account.json.keyfile", credentials_path)
-    hadoop_conf.set("fs.gs.auth.service.account.enable", "true")
-    
-    # Create Spark Session
+    # Create Spark session
     spark = SparkSession.builder \
-        .config(conf=sc.getConf()) \
+        .appName('AgriDataTransformation') \
+        .config('spark.jars', '/opt/spark/jars/gcs-connector-hadoop3-latest.jar') \
+        .config('spark.hadoop.google.cloud.auth.service.account.enable', 'true') \
+        .config('spark.hadoop.google.cloud.auth.service.account.json.keyfile', '/opt/spark/conf/gcp-creds.json') \
+        .config('spark.hadoop.fs.gs.impl', 'com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystem') \
+        .config('spark.hadoop.fs.gs.project.id', project_id) \
         .getOrCreate()
     
+    print("Spark session created with GCS connector configured")
     return spark
+
+def check_gcs_bucket_exists(bucket_name):
+    """
+    Check if the GCS bucket exists, create it if it doesn't.
+    """
+    try:
+        storage_client = storage.Client()
+        bucket = storage_client.bucket(bucket_name)
+        
+        if not bucket.exists():
+            print(f"Bucket {bucket_name} does not exist, creating it...")
+            storage_client.create_bucket(bucket_name)
+            print(f"Created bucket {bucket_name}")
+        else:
+            print(f"Bucket {bucket_name} exists")
+        
+        return True
+    except Exception as e:
+        print(f"Error checking/creating GCS bucket: {e}")
+        return False
+
+def list_gcs_files(bucket_name, prefix):
+    """
+    List files in a GCS bucket with a given prefix.
+    """
+    try:
+        storage_client = storage.Client()
+        bucket = storage_client.bucket(bucket_name)
+        blobs = list(bucket.list_blobs(prefix=prefix))
+        
+        if not blobs:
+            print(f"No files found in gs://{bucket_name}/{prefix}")
+            return []
+        
+        files = [blob.name for blob in blobs]
+        print(f"Found {len(files)} files in gs://{bucket_name}/{prefix}")
+        return files
+    except Exception as e:
+        print(f"Error listing GCS files: {e}")
+        return []
 
 # Schema definitions for validation (optional)
 farm_schema = {
