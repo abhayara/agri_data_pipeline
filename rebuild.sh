@@ -43,6 +43,7 @@ sleep 10
 # Step 3: Update configurations
 echo "Step 3: Updating configurations..."
 check_fix_kafka_config
+check_fix_gcs_config
 
 # Check if the .env file has the GCP_LOCATION set for asia-south1
 if ! grep -q "GCP_LOCATION=asia-south1" ./.env; then
@@ -75,6 +76,10 @@ ensure_broker_hostname_resolution
 # Start Spark
 echo "Starting Spark..."
 start-spark
+
+# Verify Spark (this will also check GCS config since we updated the verify-spark function)
+echo "Verifying Spark setup..."
+verify-spark
 
 # Start Metabase
 echo "Starting Metabase..."
