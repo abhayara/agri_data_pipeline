@@ -296,3 +296,20 @@ Creating Kafka topic...
 WARNING: Due to limitations in metric names, topics with a period ('.') or underscore ('_') could collide. To avoid issues it is best to use either, but not both.
 Created topic agri_data.
 [0;32m✓ Kafka topic 'agri_data' created[0m
+[dbt-cloud 596fba1] Checkpoint: Kafka setup complete - 2025-03-30 10:08:16
+ 1 file changed, 41 insertions(+)
+
+[0;32m============================================================[0m
+[0;32m== 4. Starting PostgreSQL[0m
+[0;32m============================================================[0m
+time="2025-03-30T10:09:30Z" level=warning msg="/home/abhay/DE1/agri_data_pipeline/docker/postgres/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+ Container agri_data_pipeline-postgres  Creating
+ Container agri_data_pipeline-postgres  Created
+ Container agri_data_pipeline-pgadmin  Creating
+ Container agri_data_pipeline-pgadmin  Created
+ Container agri_data_pipeline-postgres  Starting
+ Container agri_data_pipeline-postgres  Started
+ Container agri_data_pipeline-pgadmin  Starting
+ Container agri_data_pipeline-pgadmin  Started
+[0;32m✓ PostgreSQL container started[0m
+[0;32m✓ Container agri_data_pipeline-postgres is running[0m
