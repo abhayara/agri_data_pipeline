@@ -1,0 +1,89 @@
+version: 2
+
+models:
+  - name: farm_analytics
+    description: Farm-level analytics and KPIs
+    columns:
+      - name: farm_id
+        description: Unique identifier for the farm
+        tests:
+          - unique
+          - not_null
+      - name: farm_name
+        description: Name of the farm
+      - name: total_production
+        description: Total production across all crops for the farm
+      - name: average_yield
+        description: Average yield per hectare across all crops
+      - name: sustainability_score
+        description: Overall sustainability score for the farm
+      - name: production_efficiency
+        description: Production efficiency ratio
+
+  - name: crop_performance
+    description: Crop performance metrics
+    columns:
+      - name: crop_id
+        description: Unique identifier for the crop
+      - name: crop_name
+        description: Name of the crop
+      - name: total_production
+        description: Total production of the crop across all farms
+      - name: average_yield
+        description: Average yield per hectare for the crop
+      - name: growth_rate
+        description: Year-over-year growth rate for the crop production
+      - name: profitability_index
+        description: Profitability index for the crop
+
+  - name: sustainability_metrics
+    description: Environmental sustainability metrics
+    columns:
+      - name: farm_id
+        description: Unique identifier for the farm
+      - name: farm_name
+        description: Name of the farm
+      - name: water_efficiency
+        description: Water usage efficiency score
+      - name: carbon_efficiency
+        description: Carbon footprint efficiency score
+      - name: pesticide_efficiency
+        description: Pesticide usage efficiency score
+      - name: overall_sustainability_score
+        description: Overall sustainability score
+
+  - name: yield_optimization
+    description: Yield optimization analysis
+    columns:
+      - name: farm_id
+        description: Unique identifier for the farm
+      - name: crop_id
+        description: Unique identifier for the crop
+      - name: farm_name
+        description: Name of the farm
+      - name: crop_name
+        description: Name of the crop
+      - name: current_yield
+        description: Current yield per hectare
+      - name: optimal_yield
+        description: Estimated optimal yield per hectare
+      - name: yield_gap
+        description: Gap between current and optimal yield
+      - name: optimization_recommendations
+        description: Recommendations for yield optimization
+
+  - name: weather_impact
+    description: Weather impact on crop performance
+    columns:
+      - name: crop_id
+        description: Unique identifier for the crop
+      - name: crop_name
+        description: Name of the crop
+      - name: temperature_sensitivity
+        description: Sensitivity to temperature variations
+      - name: precipitation_sensitivity
+        description: Sensitivity to precipitation variations
+      - name: humidity_sensitivity
+        description: Sensitivity to humidity variations
+      - name: weather_risk_score
+        description: Overall weather risk score for the crop 

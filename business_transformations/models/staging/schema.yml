@@ -1,0 +1,74 @@
+version: 2
+
+models:
+  - name: stg_farm
+    description: Staging model for farm dimension
+    columns:
+      - name: farm_id
+        description: Unique identifier for the farm
+        tests:
+          - unique
+          - not_null
+
+  - name: stg_crop
+    description: Staging model for crop dimension
+    columns:
+      - name: crop_id
+        description: Unique identifier for the crop
+        tests:
+          - unique
+          - not_null
+
+  - name: stg_weather
+    description: Staging model for weather dimension
+    columns:
+      - name: weather_id
+        description: Unique identifier for the weather record
+        tests:
+          - unique
+          - not_null
+
+  - name: stg_soil
+    description: Staging model for soil dimension
+    columns:
+      - name: soil_id
+        description: Unique identifier for the soil record
+        tests:
+          - unique
+          - not_null
+
+  - name: stg_harvest
+    description: Staging model for harvest dimension
+    columns:
+      - name: harvest_id
+        description: Unique identifier for the harvest
+        tests:
+          - unique
+          - not_null
+
+  - name: stg_production
+    description: Staging model for production facts
+    columns:
+      - name: production_id
+        description: Unique identifier for the production record
+        tests:
+          - unique
+          - not_null
+
+  - name: stg_yield
+    description: Staging model for yield facts
+    columns:
+      - name: yield_id
+        description: Unique identifier for the yield record
+        tests:
+          - unique
+          - not_null
+
+  - name: stg_sustainability
+    description: Staging model for sustainability facts
+    columns:
+      - name: sustainability_id
+        description: Unique identifier for the sustainability record
+        tests:
+          - unique
+          - not_null 
