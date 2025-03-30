@@ -44,6 +44,42 @@ This document outlines the major improvements and fixes made to the Agricultural
 - Added help command that explains all available functions
 - Created upgrade notes to document changes
 
+## April 2025 Updates
+
+### GCS Connector Configuration Automation
+
+The batch pipeline has been improved with automated Google Cloud Storage (GCS) connector configuration for Spark jobs. This includes:
+
+1. **Auto-detection and configuration** - The system now automatically detects if the GCS connector is properly configured and fixes any issues.
+
+2. **Dependency management** - Added proper dependencies for the GCS connector and resolved Guava version conflicts that were causing errors.
+
+3. **Filesystem implementation** - Added required configuration for GCS filesystem implementation classes.
+
+4. **Credentials management** - Automated the process of copying GCP credentials to the necessary locations.
+
+5. **Type handling improvement** - Fixed type mismatch issues in the data generation process, ensuring proper float/int handling.
+
+### Commands and Scripts Updates
+
+1. Added new function `check_fix_gcs_config` to `commands.sh` that handles all GCS connector configuration needs.
+
+2. Updated `verify-spark` function to include GCS connector verification.
+
+3. Updated `check-environment` function to ensure GCP credentials are copied to all necessary locations.
+
+4. Updated `start-batch-pipeline` function to ensure GCS configuration is correct before running the pipeline.
+
+5. Updated `rebuild.sh` to include GCS connector checks during the rebuild process.
+
+### Documentation
+
+1. Added comprehensive documentation about the GCS connector configuration in the README.md.
+
+2. Added new section in UPGRADE_NOTES.md (this file) detailing the changes.
+
+All these improvements ensure that the batch pipeline can reliably read from and write to Google Cloud Storage, which is essential for the proper functioning of the data lake architecture.
+
 ## Potential Future Improvements
 
 1. Implement monitoring with Prometheus and Grafana
