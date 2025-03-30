@@ -20,8 +20,8 @@ def create_spark_session():
         .config("spark.hadoop.google.cloud.auth.service.account.json.keyfile", GOOGLE_APPLICATION_CREDENTIALS) \
         .config("spark.hadoop.fs.gs.impl", "com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystem") \
         .config("spark.hadoop.fs.AbstractFileSystem.gs.impl", "com.google.cloud.hadoop.fs.gcs.GoogleHadoopFS") \
-        .config("spark.driver.extraClassPath", "/home/abhay/.ivy2/jars/*") \
-        .config("spark.executor.extraClassPath", "/home/abhay/.ivy2/jars/*") \
+        .config("spark.driver.extraClassPath", "/usr/local/spark/jars/*") \
+        .config("spark.executor.extraClassPath", "/usr/local/spark/jars/*") \
         .config("spark.executor.memory", "1g") \
         .config("spark.driver.memory", "1g") \
         .getOrCreate()
