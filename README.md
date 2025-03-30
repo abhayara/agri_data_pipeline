@@ -1,122 +1,206 @@
 # Agricultural Data Pipeline
 
-A simplified data pipeline for processing agricultural data, using both streaming and batch processing approaches.
+This project implements an end-to-end agricultural data pipeline that processes streaming and batch data for analysis and visualization.
 
-## Overview
+## Project Overview
 
-This project implements a data pipeline for agricultural data processing that:
+The pipeline has the following components:
 
-1. Generates synthetic agricultural data
-2. Streams the data through Kafka
-3. Stores raw data in Google Cloud Storage
-4. Processes data using PySpark for ETL operations
-5. Loads transformed data into BigQuery for analysis
+1. **Data Generation** - Synthetic agricultural data generation with fields including farm information, crop data, weather metrics, soil properties, and more.
+2. **Streaming Pipeline** - Real-time data processing using Kafka and Airflow.
+3. **Batch Processing** - OLAP transformations using Apache Spark.
+4. **Data Warehouse Integration** - Loading processed data to BigQuery using Airflow DAGs.
+5. **Analytics** - Transformation of data using dbt for business intelligence.
+6. **Visualization** - Dashboard creation using Metabase.
 
 ## Architecture
 
-![Architecture Diagram](images/architecture.png)
+- **Streaming Layer**: Kafka, Confluent, Zookeeper
+- **Data Processing**: Apache Spark
+- **Orchestration**: Apache Airflow
+- **Storage**: Google Cloud Storage (GCS)
+- **Data Warehouse**: Google BigQuery
+- **Transformation**: dbt (data build tool)
+- **Visualization**: Metabase
 
-### Components:
-
-1. **Streaming Pipeline**
-   - **Producer**: Generates synthetic agricultural data (farm, crop, weather, etc.)
-   - **Consumer**: Consumes data from Kafka and stores in GCS
-
-2. **Batch Pipeline**
-   - **Spark ETL**: Transforms raw data into dimension and fact tables
-   - **BigQuery Loader**: Loads transformed data into BigQuery
-
-## Getting Started
+## Setup
 
 ### Prerequisites
 
 - Docker and Docker Compose
-- Python 3.8+
-- GCP Account (for GCS and BigQuery)
+- Google Cloud Platform account and project
+- Python 3.8+ with pip
+- Java JDK 11
+- Network connectivity to download Docker images
+- At least 8GB of RAM available for Docker
 
-### Setup
+### Step-by-Step Setup Instructions
 
 1. Clone the repository:
-   ```bash
-   git clone https://github.com/yourusername/agri_data_pipeline.git
+   ```
+   git clone <repository-url>
    cd agri_data_pipeline
    ```
 
-2. Create environment file:
-   ```bash
-   cp .env.example .env
+2. Install required Python packages:
    ```
-
-3. Update the `.env` file with your GCP credentials and other configurations.
-
-4. Install dependencies:
-   ```bash
    pip install -r requirements.txt
    ```
 
-### Running the Pipeline
+3. Prepare GCP credentials:
+   - Create a service account in GCP with the following permissions:
+     - BigQuery Admin
+     - Storage Admin
+     - Dataflow Admin
+   - Download the JSON key file and save it as `gcp-creds.json` in the project root
 
-#### Start Streaming Pipeline
+4. Configure environment variables:
+   ```
+   cp .env.example .env
+   ```
+   Edit the `.env` file to update:
+   - `GCP_PROJECT_ID` - Your Google Cloud project ID
+   - `GCS_BUCKET_NAME` - Name of your GCS bucket (will be created if it doesn't exist)
+   - Other settings as needed
 
-```bash
-# Start the producer to generate data
-python streaming_pipeline/producer.py
+5. Start the complete pipeline with a single command:
+   ```
+   source commands.sh && start-project
+   ```
+   This will:
+   - Verify your environment is properly set up
+   - Create GCP infrastructure with Terraform
+   - Start all required Docker containers
+   - Initialize the streaming and batch pipelines
+   - Run dbt transformations for analytics models
+   - Set up Metabase for visualization
 
-# Start the consumer to store data in GCS
-python streaming_pipeline/consumer.py
+### Alternative: Step-by-Step Manual Setup
+
+If you prefer to start components individually for testing or development:
+
+1. Initialize infrastructure:
+   ```
+   source commands.sh && terraform-start
+   ```
+
+2. Start and verify Kafka:
+   ```
+   source commands.sh && start-kafka && verify-kafka
+   ```
+
+3. Start Airflow:
+   ```
+   source commands.sh && start-airflow && verify-airflow
+   ```
+
+4. Start the streaming pipeline in foreground mode (shows logs):
+   ```
+   source commands.sh && docker-compose -f ./docker/streaming/docker-compose.yml --env-file ./.env up
+   ```
+   Or in background mode:
+   ```
+   source commands.sh && docker-compose -f ./docker/streaming/docker-compose.yml --env-file ./.env up -d
+   ```
+
+5. Start Spark for batch processing:
+   ```
+   source commands.sh && start-spark && verify-spark
+   ```
+
+6. Run batch processing:
+   ```
+   source commands.sh && start-batch-pipeline
+   ```
+
+7. Run dbt transformations:
+   ```
+   source commands.sh && run-dbt
+   ```
+
+8. Start Metabase for visualization:
+   ```
+   source commands.sh && start-metabase
+   ```
+
+## Verifying the Pipeline
+
+After setup, you can verify all components are working properly:
+
+```
+source commands.sh && verify-all
 ```
 
-#### Run Batch Pipeline
+This will check:
+- Kafka broker and topic status
+- Producer message delivery
+- Consumer processing status
+- Airflow setup
+- Spark cluster status
+- Batch pipeline processing
 
-```bash
-# Run the ETL pipeline
-python batch_pipeline/export_to_gcs/pipeline.py
+## Metabase Dashboard Setup
+
+1. Access Metabase at http://localhost:3000
+2. Complete the initial setup:
+   - Create an admin account
+   - Connect to your data source (BigQuery)
+   - Enter your GCP project ID and use service account authentication
+
+3. Creating a Dashboard:
+   - Click "New" > "Dashboard"
+   - Name your dashboard (e.g., "Agricultural Analytics")
+   - Add questions using the "+ Add" button
+   - Create visualizations for:
+     - Crop yield by farm type
+     - Weather impact on production
+     - Soil quality metrics
+     - Financial performance
+
+4. Example queries:
+   - Average yield by crop type
+   - Farm production costs vs. revenue
+   - Sustainability metrics over time
+   - Correlation between weather and yield
+
+## Accessing Services
+
+- **Kafka Control Center**: http://localhost:9021
+- **Airflow UI**: http://localhost:8080 (login credentials in your .env file, typically airflow/airflow)
+- **Spark UI**: http://localhost:8080
+- **Metabase**: http://localhost:3000
+
+## dbt Documentation
+
+To generate and view dbt documentation for your analytics models:
+
+```
+source commands.sh && serve-dbt-docs
 ```
 
-## Data Model
-
-The data model includes these main entities:
-
-- **Farm Dimension**: Information about farms
-- **Crop Dimension**: Information about crops
-- **Weather Dimension**: Weather conditions
-- **Soil Dimension**: Soil characteristics
-- **Yield Facts**: Crop yield metrics
-- **Sustainability Facts**: Environmental metrics
-
-## File Structure
-
-```
-agri_data_pipeline/
-├── streaming_pipeline/        # Kafka streaming components
-│   ├── producer.py            # Data generator and Kafka producer
-│   ├── consumer.py            # Kafka consumer to GCS
-│   └── config.py              # Streaming pipeline configuration
-│
-├── batch_pipeline/            # Batch processing components
-│   ├── export_to_gcs/         # PySpark ETL pipeline
-│   │   ├── pipeline.py        # Main ETL pipeline
-│   │   ├── config.py          # Pipeline configuration
-│   │   └── utils.py           # Utility functions
-│   │
-│   └── export_to_big_query/   # BigQuery loading components
-│
-├── docker/                    # Docker configuration
-├── .env.example               # Environment variables template
-└── requirements.txt           # Python dependencies
-```
+This will make the documentation available at http://localhost:8080
 
 ## Troubleshooting
 
-- **Connection Issues**: Ensure all services are running correctly and check the `.env` file for proper configuration
-- **Version Compatibility**: The project uses compatible versions of all dependencies to avoid conflicts
-- **GCP Authentication**: Make sure you have valid GCP credentials and permissions
+- **Verifying services**: Run `source commands.sh && verify-all`
+- **Checking logs**: Run `docker logs [container_name]` (e.g., `docker logs agri_data_producer`)
+- **Restarting components**:
+  - Kafka: `source commands.sh && restart-kafka`
+  - Streaming: `source commands.sh && restart-streaming`
+  - Airflow: `source commands.sh && restart-airflow`
+  - Spark: `source commands.sh && restart-spark`
+  - dbt: `source commands.sh && run-dbt`
+- **Complete reset**: Run `source commands.sh && full-reset-and-test`
+  - The reset function will interactively ask if you want to reuse existing infrastructure resources
+  - All logs will be displayed in "frontfoot" mode (immediately visible) to help troubleshoot issues
+  - You can interrupt at any point and manually fix issues before continuing
 
-## Dependencies
+## Common Issues
 
-- PySpark 3.1.3
-- Confluent Kafka 2.0.2
-- Google Cloud Storage 2.7.0
-- Google Cloud BigQuery 3.3.5
-- Pandas 1.5.3
-- Python-dotenv 0.21.1 
+- If port conflicts occur, edit the port mappings in the `.env` file
+- For GCP authentication issues, verify your `gcp-creds.json` has the correct permissions
+- If containers fail to start, check Docker resource limits
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request. 

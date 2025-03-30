@@ -13,7 +13,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && apt update \
   && apt install -y librdkafka-dev
 
+WORKDIR /home/streaming_pipeline
 COPY . /home/streaming_pipeline
-# COPY ../data /home/streaming_pipeline
 
-RUN pip3 install confluent-kafka pyarrow
+# Install required Python packages
+RUN pip3 install --no-cache-dir \
+    confluent-kafka \
+    pyarrow \
+    google-cloud-storage \
+    uuid
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+
+# Default command - override in docker-compose
+CMD ["python", "data_producer.py"]

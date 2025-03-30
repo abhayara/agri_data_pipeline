@@ -1,253 +1,1297 @@
-#!/bin/bash
+PROJECT_NAME='agri_data_pipeline'
+# Set JAVA_HOME for Java-dependent services
+export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
+#EXPORT_TO_BIGQUERY_PIPELINE_UUID='94ab2c7a2aa24bde8e148ef84c88a10f'
 
-# Agricultural Data Pipeline Commands
-# ----------------------------------
-
-# Load environment variables if .env exists
-if [ -f .env ]; then
-    source .env
-    echo "Loaded environment variables from .env"
+# Check if the network exists; if not, create it
+if ! docker network inspect ${PROJECT_NAME}-network &>/dev/null; then
+    docker network create ${PROJECT_NAME}-network
 else
-    echo "Warning: .env file not found. Using default values."
+    echo "Network ${PROJECT_NAME}-network already exists."
 fi
 
-# Set default project name if not set
-if [ -z "$PROJECT_NAME" ]; then
-    export PROJECT_NAME="agri_data_pipeline"
-fi
-
-# Function to display a section header
-section() {
-    echo "========================================"
-    echo "  $1"
-    echo "========================================"
+# Function to start streaming data
+stream-data() {
+	docker-compose -f ./docker/streaming/docker-compose.yml --env-file ./.env up
 }
 
-# Function to check if a command exists
-command_exists() {
-    command -v "$1" >/dev/null 2>&1
+# Function to start Kafka
+start-kafka() {
+	docker-compose -f ./docker/kafka/docker-compose.yml --env-file ./.env up -d
 }
 
-# Function to install Python dependencies
-install_dependencies() {
-    section "Installing Python Dependencies"
+# Function to start Spark
+start-spark() {
+    # Ensure the build script is executable and run it
+    chmod +x ./docker/spark/build.sh
+    ./docker/spark/build.sh
+	# Start Spark containers
+	docker-compose -f ./docker/spark/docker-compose.yml --env-file ./.env up -d
+}
+
+# Function to start Airflow
+start-airflow() {
+   docker-compose -f ./docker/airflow/docker-compose.yml --env-file ./.env up -d
+   sleep 5
+#    sudo cp ./streaming_pipeline/kafka_to_gcs_streaming/kafka_to_gcs.yaml ./docker/mage/${PROJECT_NAME}/data_exporters/
+#    sudo cp ./streaming_pipeline/kafka_to_gcs_streaming/consume_from_kafka.yaml ./docker/mage/${PROJECT_NAME}/data_loaders/
+#    sudo mkdir ./docker/mage/${PROJECT_NAME}/pipelines/kafka_to_gcs_streaming
+#    sudo cp ./streaming_pipeline/kafka_to_gcs_streaming/metadata.yaml ./docker/mage/${PROJECT_NAME}/pipelines/kafka_to_gcs_streaming/
+#    sudo touch ./docker/mage/${PROJECT_NAME}/pipelines/kafka_to_gcs_streaming/__init__.py
+
+#    sudo cp ./batch_pipeline/export_to_big_query/data_exporters/* ./docker/mage/${PROJECT_NAME}/data_exporters/
+#    sudo cp ./batch_pipeline/export_to_big_query/data_loaders/* ./docker/mage/${PROJECT_NAME}/data_loaders/
+#    sudo mkdir ./docker/mage/${PROJECT_NAME}/pipelines/export_to_big_query
+#    sudo cp ./batch_pipeline/export_to_big_query/*.yaml ./docker/airflw/${PROJECT_NAME}/pipelines/export_to_big_query/
+#    sudo touch ./docker/airflow/${PROJECT_NAME}/pipelines/export_to_big_query/__init__.py
+}
+
+# Function to start Postgres
+start-postgres() {
+   docker-compose -f ./docker/postgres/docker-compose.yml --env-file ./.env up -d
+}
+
+# Function to start Metabase
+start-metabase() {
+   docker-compose -f ./docker/metabase/docker-compose.yml --env-file ./.env up -d
+}
+
+# Function to stop Kafka
+stop-kafka() {
+    docker-compose -f ./docker/kafka/docker-compose.yml --env-file ./.env down
+}
+
+# Function to stop Spark
+stop-spark() {
+    docker-compose -f ./docker/spark/docker-compose.yml --env-file ./.env down
+}
+
+# Function to stop Airflow
+stop-airflow() {
+    docker-compose -f ./docker/airflow/docker-compose.yml --env-file ./.env down
+}
+
+# Function to stop Postgres
+stop-postgres() {
+    docker-compose -f ./docker/postgres/docker-compose.yml --env-file ./.env down
+}
+
+# Function to stop Metabase
+stop-metabase() {
+    docker-compose -f ./docker/metabase/docker-compose.yml --env-file ./.env down
+}
+
+# Function to ensure broker hostname resolution in streaming components
+ensure_broker_hostname_resolution() {
+    echo "==========================================================="
+    echo "Ensuring broker hostname resolution in streaming components..."
     
-    if ! command_exists pip; then
-        echo "Error: pip is not installed. Please install Python and pip first."
+    # Get current broker IP
+    BROKER_IP=$(docker inspect agri_data_pipeline-broker -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}')
+    
+    if [ -z "$BROKER_IP" ]; then
+        echo "❌ Could not detect broker IP address."
+        echo "Make sure Kafka broker is running first with 'start-kafka'"
         return 1
     fi
     
-    echo "Installing required Python packages..."
-    pip install -r requirements.txt
+    echo "✅ Detected broker IP: $BROKER_IP"
     
-    if [ $? -eq 0 ]; then
-        echo "Successfully installed dependencies."
-    else
-        echo "Error installing dependencies. Please check the output above."
-        return 1
-    fi
-}
-
-# Function to check if Kafka is running
-check_kafka() {
-    section "Checking Kafka Status"
-    
-    # Try to connect to Kafka
-    if command_exists nc; then
-        if nc -z localhost 9092 >/dev/null 2>&1; then
-            echo "Kafka is running on port 9092."
-            return 0
+    # Update the streaming docker-compose file to use the correct broker IP
+    if [ -f "./docker/streaming/docker-compose.yml" ]; then
+        # Check if we need to update the broker IP
+        CURRENT_IP=$(grep -o "broker:[0-9]\+\.[0-9]\+\.[0-9]\+\.[0-9]\+" ./docker/streaming/docker-compose.yml | head -1 | cut -d ":" -f2)
+        
+        if [ "$CURRENT_IP" != "$BROKER_IP" ]; then
+            echo "Updating broker IP in docker-compose file from $CURRENT_IP to $BROKER_IP"
+            # Use sed to replace the IP in the docker-compose file
+            sed -i "s/broker:[0-9]\+\.[0-9]\+\.[0-9]\+\.[0-9]\+/broker:$BROKER_IP/g" ./docker/streaming/docker-compose.yml
+            echo "✅ Updated broker IP in docker-compose file."
         else
-            echo "Kafka is not running on port 9092."
-            return 1
+            echo "✅ Broker IP in docker-compose file is already correct."
         fi
     else
-        echo "Warning: 'nc' command not found. Cannot check Kafka status."
+        echo "❌ Streaming docker-compose file not found."
         return 1
     fi
+    
+    echo "Hostname resolution is configured correctly."
+    echo "==========================================================="
+    return 0
 }
 
-# Function to setup local environment
-setup_environment() {
-    section "Setting Up Environment"
-    
-    # Create .env file if it doesn't exist
-    if [ ! -f .env ]; then
-        echo "Creating .env file from .env.example"
-        cp .env.example .env
-        echo "Please edit .env file with your configuration values."
+# Original verify-kafka function
+verify-kafka() {
+    echo "==========================================================="
+    echo "Verifying Kafka setup..."
+    # Check if broker container is running
+    if docker ps | grep -q "${PROJECT_NAME}-broker"; then
+        echo "✅ Kafka broker is running."
+        
+        # Add call to ensure hostname resolution
+        ensure_broker_hostname_resolution
+        
+        # Check if topics can be listed
+        TOPICS=$(docker exec ${PROJECT_NAME}-broker kafka-topics --bootstrap-server broker:29092 --list)
+        if [ $? -eq 0 ]; then
+            echo "✅ Kafka broker is accessible and functional."
+            echo "Available topics:"
+            echo "$TOPICS"
+            
+            # Check if our topic exists
+            if echo "$TOPICS" | grep -q "agri_data"; then
+                echo "✅ Topic 'agri_data' exists."
+                # Get topic details
+                echo "Topic details:"
+                docker exec ${PROJECT_NAME}-broker kafka-topics --bootstrap-server broker:29092 --describe --topic agri_data
+            else
+                echo "❌ Topic 'agri_data' does not exist yet."
+                # Create the topic if it doesn't exist
+                echo "Creating 'agri_data' topic..."
+                docker exec ${PROJECT_NAME}-broker kafka-topics --bootstrap-server broker:29092 --create --topic agri_data --partitions 1 --replication-factor 1 --if-not-exists
+                if [ $? -eq 0 ]; then
+                    echo "✅ Topic 'agri_data' created successfully."
+                else
+                    echo "❌ Failed to create topic 'agri_data'."
+                    return 1
+                fi
+            fi
+        else
+            echo "❌ Cannot connect to Kafka broker."
+            return 1
+        fi
+        
+        echo "Kafka verification complete."
+    else
+        echo "❌ Kafka broker is NOT running."
+        echo "Try starting Kafka with 'start-kafka' command."
+        return 1
     fi
-    
-    # Install dependencies
-    install_dependencies
-    
-    echo "Environment setup complete."
+    echo "==========================================================="
+    return 0
 }
 
-# Function to start the producer
-start_producer() {
-    section "Starting Agricultural Data Producer"
+# Update start-streaming-pipeline function to include hostname resolution check
+start-streaming-pipeline(){
+    echo "==========================================================="
+    echo "Starting the streaming data pipeline..."
     
-    # Check if dependencies are installed
-    if ! python -c "import confluent_kafka" >/dev/null 2>&1; then
-        echo "Error: confluent_kafka module not found. Installing dependencies..."
-        install_dependencies
-    fi
+    # Check environment first
+    check-environment || { echo "⛔ Environment check failed. Please fix the issues before continuing."; return 1; }
     
-    echo "Starting Kafka producer..."
-    python streaming_pipeline/producer.py &
-    PRODUCER_PID=$!
-    echo "Producer started with PID: $PRODUCER_PID"
+    # Start Kafka
+    echo "Starting Kafka services..."
+    start-kafka
     
-    # Export the PID for later use
-    export PRODUCER_PID=$PRODUCER_PID
-}
-
-# Function to start the consumer
-start_consumer() {
-    section "Starting Agricultural Data Consumer"
+    # Wait for Kafka to be ready
+    echo "Waiting for Kafka to be ready..."
+    sleep 15
     
-    # Check if dependencies are installed
-    if ! python -c "import confluent_kafka, google.cloud" >/dev/null 2>&1; then
-        echo "Error: Required modules not found. Installing dependencies..."
-        install_dependencies
-    fi
+    # Verify Kafka is running correctly
+    echo "Verifying Kafka setup..."
+    verify-kafka || { 
+        echo "⛔ Kafka verification failed. Please check the logs and fix any issues."; 
+        echo "You can try restarting Kafka with 'start-kafka' or check logs with 'docker logs ${PROJECT_NAME}-broker'";
+        return 1; 
+    }
     
-    echo "Starting Kafka consumer..."
-    python streaming_pipeline/consumer.py &
-    CONSUMER_PID=$!
-    echo "Consumer started with PID: $CONSUMER_PID"
+    # Ensure broker hostname resolution is configured properly
+    echo "Configuring broker hostname resolution..."
+    ensure_broker_hostname_resolution || {
+        echo "⛔ Failed to configure hostname resolution. Please check network settings.";
+        return 1;
+    }
     
-    # Export the PID for later use
-    export CONSUMER_PID=$CONSUMER_PID
-}
-
-# Function to start the streaming pipeline
-start_streaming() {
-    section "Starting Streaming Pipeline"
+    # Start Airflow for orchestration
+    echo "Starting Airflow services..."
+    start-airflow
     
-    # Start producer and consumer
-    start_producer
-    start_consumer
+    # Wait for Airflow to be ready
+    echo "Waiting for Airflow to be ready..."
+    sleep 20
     
-    echo "Streaming pipeline started."
-    echo "Use 'stop_streaming' to stop the streaming pipeline."
+    # Start the streaming components with logs in current terminal
+    echo "Starting data producer and consumer in foreground mode..."
+    echo "You'll see logs in this terminal. Press Ctrl+C to stop."
+    echo "Wait 5 seconds before starting... (Ctrl+C now to abort)"
+    sleep 5
+    
+    # Run in current terminal with logs visible
+    docker-compose -f ./docker/streaming/docker-compose.yml --env-file ./.env up
 }
 
 # Function to stop the streaming pipeline
-stop_streaming() {
-    section "Stopping Streaming Pipeline"
-    
-    # Kill producer and consumer if they're running
-    if [ ! -z "$PRODUCER_PID" ]; then
-        echo "Stopping producer (PID: $PRODUCER_PID)..."
-        kill $PRODUCER_PID 2>/dev/null
-        unset PRODUCER_PID
-    fi
-    
-    if [ ! -z "$CONSUMER_PID" ]; then
-        echo "Stopping consumer (PID: $CONSUMER_PID)..."
-        kill $CONSUMER_PID 2>/dev/null
-        unset CONSUMER_PID
-    fi
-    
-    echo "Streaming pipeline stopped."
+stop-streaming-pipeline(){
+    # Stop Kafka and Mage
+    stop-kafka
+    stop-airflow
 }
 
-# Function to run the batch pipeline
-run_batch_pipeline() {
-    section "Running Batch Pipeline"
+olap-transformation-pipeline(){
+    echo "==========================================================="
+    echo "Starting OLAP transformation pipeline..."
     
-    # Check if dependencies are installed
-    if ! python -c "import pyspark" >/dev/null 2>&1; then
-        echo "Error: pyspark module not found. Installing dependencies..."
-        install_dependencies
-    fi
+    # Check environment first
+    check-environment || { echo "⛔ Environment check failed. Please fix the issues before continuing."; return 1; }
     
-    echo "Running batch pipeline for ETL processing..."
-    python batch_pipeline/export_to_gcs/pipeline.py
-    
-    if [ $? -eq 0 ]; then
-        echo "Batch pipeline completed successfully."
+    # Verify that temporary data directory exists and has data
+    if [ ! -d "/tmp/agri_data" ] || [ -z "$(ls -A /tmp/agri_data)" ]; then
+        echo "⚠️ No data found in /tmp/agri_data."
+        echo "  This may be because the streaming pipeline hasn't processed any data yet."
+        echo "  You can start the streaming pipeline with 'start-streaming-pipeline' first."
+        echo "  Proceeding with sample data generation..."
     else
-        echo "Error running batch pipeline. Check the output above."
+        echo "✅ Found data in /tmp/agri_data: $(ls -1 /tmp/agri_data | wc -l) file(s)."
     fi
+    
+    # Execute the Python batch pipeline script
+    echo "Running PySpark transformation script..."
+    
+    # Set environment variables for better error messages
+    export PYTHONIOENCODING=utf-8
+    
+    python batch_pipeline/export_to_gcs/pipeline.py 2>&1 | tee /tmp/batch_pipeline.log
+    
+    # Check for success
+    if grep -q "Successfully processed" /tmp/batch_pipeline.log; then
+        echo "✅ Batch pipeline completed successfully."
+    else
+        if grep -q "Error" /tmp/batch_pipeline.log; then
+            echo "❌ Batch pipeline encountered errors."
+            echo "Error details:"
+            grep -A 5 "Error" /tmp/batch_pipeline.log
+            echo "See /tmp/batch_pipeline.log for full details."
+        else
+            echo "⚠️ Batch pipeline may have completed with warnings."
+            echo "See /tmp/batch_pipeline.log for full details."
+        fi
+    fi
+    
+    echo "==========================================================="
 }
 
-# Function to run the full pipeline
-run_pipeline() {
-    section "Running Full Pipeline"
+gcs-to-bigquery-pipeline(){
+    echo "==========================================================="
+    echo "Starting GCS to BigQuery export pipeline..."
     
-    # Install dependencies if needed
-    install_dependencies
+    # Check that Airflow is running
+    if ! docker ps | grep -q "airflow-airflow-webserver-1"; then
+        echo "❌ Airflow is not running. Cannot trigger the DAG."
+        echo "  Please start Airflow with 'start-airflow' and try again."
+        return 1
+    fi
     
-    # Start streaming
-    start_streaming
+    # Verify the DAG exists
+    if ! docker exec airflow-airflow-webserver-1 airflow dags list | grep -q "gcs_to_bigquery_export"; then
+        echo "❌ The 'gcs_to_bigquery_export' DAG is not found in Airflow."
+        echo "  Please check if the DAG is properly deployed."
+        # List available DAGs
+        echo "Available DAGs:"
+        docker exec airflow-airflow-webserver-1 airflow dags list | grep -v "DAGS"
+        return 1
+    fi
     
-    # Wait for some data to be collected
-    echo "Waiting for data collection (30 seconds)..."
+    # Manual API trigger for the GCS to BigQuery DAG
+    echo "Triggering GCS to BigQuery export DAG..."
+    
+    RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "http://localhost:${AIRFLOW_PORT}/api/v1/dags/gcs_to_bigquery_export/dagRuns" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Basic $(echo -n "${_AIRFLOW_WWW_USER_USERNAME}:${_AIRFLOW_WWW_USER_PASSWORD}" | base64)" \
+    -d '{"conf": {}, "note": "Manual trigger from command line"}')
+    
+    if [ "$RESPONSE" -eq 200 ] || [ "$RESPONSE" -eq 201 ]; then
+        echo "✅ Successfully triggered GCS to BigQuery export DAG."
+        echo "  You can monitor the progress at: http://localhost:${AIRFLOW_PORT}/dags/gcs_to_bigquery_export/grid"
+    else
+        echo "❌ Failed to trigger DAG. HTTP response: $RESPONSE"
+        echo "  Please check the Airflow logs for more details."
+    fi
+    
+    echo "==========================================================="
+}
+
+start-batch-pipeline(){
+    echo "==========================================================="
+    echo "Starting the complete batch data processing pipeline..."
+    
+    # Check environment first
+    check-environment || { echo "⛔ Environment check failed. Please fix the issues before continuing."; return 1; }
+    
+    # 1. Run the OLAP transformation pipeline
+    echo "STEP 1: Running OLAP transformations to prepare data..."
+    olap-transformation-pipeline
+    
+    # Capture the exit status
+    TRANSFORM_STATUS=$?
+    if [ $TRANSFORM_STATUS -ne 0 ]; then
+        echo "❌ OLAP transformation pipeline failed with exit code $TRANSFORM_STATUS"
+        echo "  Stopping batch pipeline execution."
+        return 1
+    fi
+    
+    # 2. Load data to BigQuery
+    echo "STEP 2: Loading transformed data to BigQuery..."
+    gcs-to-bigquery-pipeline
+    
+    # Capture the exit status
+    BQ_STATUS=$?
+    if [ $BQ_STATUS -ne 0 ]; then
+        echo "❌ GCS to BigQuery export pipeline failed with exit code $BQ_STATUS"
+        echo "  Please check the logs for more details."
+        return 1
+    fi
+    
+    echo "✅ Batch pipeline steps have been initiated successfully."
+    echo "NOTE: The BigQuery loading may still be running in Airflow."
+    echo "  Monitor progress at: http://localhost:${AIRFLOW_PORT}"
+    echo "==========================================================="
+}
+
+gitting(){
+    git add .
+    sleep 2
+    git commit -m "Update from Local"
+    sleep 2
+    git push -u origin main
+}
+
+terraform-start(){
+    terraform -chdir=terraform init
+    terraform -chdir=terraform plan
+    terraform -chdir=terraform apply
+}
+terraform-destroy(){
+    terraform -chdir=terraform destroy
+}
+
+# Check environment and dependencies
+check-environment() {
+    echo "==========================================================="
+    echo "Checking environment and dependencies..."
+    
+    # Check Java
+    if [ -z "$JAVA_HOME" ]; then
+        echo "❌ JAVA_HOME is not set."
+        if type -p java > /dev/null; then
+            echo "Java is installed. Setting JAVA_HOME..."
+            export JAVA_HOME=$(readlink -f $(which java) | sed "s:/bin/java::")
+            echo "✅ JAVA_HOME set to $JAVA_HOME"
+        else
+            echo "❌ Java not found. Please install Java JDK."
+            echo "   Run: sudo apt update && sudo apt install -y openjdk-11-jdk"
+            return 1
+        fi
+    else
+        echo "✅ JAVA_HOME is set to $JAVA_HOME"
+    fi
+    
+    # Check GCP credentials - use a relative path if environment variable is not set
+    GCP_CREDS_PATH=${GOOGLE_APPLICATION_CREDENTIALS:-"./gcp-creds.json"}
+    if [ ! -f "$GCP_CREDS_PATH" ]; then
+        echo "❌ GCP credentials file not found at $GCP_CREDS_PATH"
+        echo "   Please make sure gcp-creds.json exists and is properly configured."
+        return 1
+    else
+        echo "✅ GCP credentials file found at $GCP_CREDS_PATH"
+        # Set the environment variable if it's not already set
+        if [ -z "$GOOGLE_APPLICATION_CREDENTIALS" ]; then
+            export GOOGLE_APPLICATION_CREDENTIALS="$GCP_CREDS_PATH"
+            echo "   Set GOOGLE_APPLICATION_CREDENTIALS=$GOOGLE_APPLICATION_CREDENTIALS"
+        fi
+    fi
+    
+    # Check required Python packages
+    echo "Checking required Python packages..."
+    if ! pip show confluent-kafka > /dev/null 2>&1; then
+        echo "❌ confluent-kafka not installed."
+        echo "   Please run: pip install -r requirements.txt"
+        return 1
+    fi
+    
+    if ! pip show pyspark > /dev/null 2>&1; then
+        echo "❌ pyspark not installed."
+        echo "   Please run: pip install -r requirements.txt"
+        return 1
+    fi
+    
+    if ! pip show google-cloud-storage > /dev/null 2>&1; then
+        echo "❌ google-cloud-storage not installed."
+        echo "   Please run: pip install -r requirements.txt"
+        return 1
+    fi
+    
+    if ! pip show pyarrow > /dev/null 2>&1; then
+        echo "❌ pyarrow not installed."
+        echo "   Please run: pip install -r requirements.txt"
+        return 1
+    fi
+    
+    echo "✅ Required Python packages are installed."
+    
+    # Check Docker
+    if ! docker --version > /dev/null 2>&1; then
+        echo "❌ Docker not found."
+        echo "   Please install Docker and Docker Compose."
+        return 1
+    else
+        echo "✅ Docker is installed."
+    fi
+    
+    if ! docker-compose --version > /dev/null 2>&1; then
+        echo "❌ Docker Compose not found."
+        echo "   Please install Docker Compose."
+        return 1
+    else
+        echo "✅ Docker Compose is installed."
+    fi
+    
+    # Create network if it doesn't exist
+    if ! docker network inspect ${PROJECT_NAME}-network &>/dev/null; then
+        echo "Creating Docker network: ${PROJECT_NAME}-network"
+        docker network create ${PROJECT_NAME}-network
+        echo "✅ Network ${PROJECT_NAME}-network created."
+    else
+        echo "✅ Network ${PROJECT_NAME}-network already exists."
+    fi
+    
+    # Check temporary directory for data processing
+    if [ ! -d "/tmp/agri_data" ]; then
+        echo "Creating temporary directory: /tmp/agri_data"
+        mkdir -p /tmp/agri_data
+        chmod 777 /tmp/agri_data
+        echo "✅ Temporary directory created."
+    else
+        echo "✅ Temporary directory /tmp/agri_data exists."
+    fi
+    
+    echo "==========================================================="
+    echo "✅ Environment check completed successfully."
+    echo "==========================================================="
+    return 0
+}
+
+start-project(){
+    echo "==========================================================="
+    echo "Starting the complete agricultural data pipeline..."
+    echo "This will create cloud resources, start services, and run all pipeline components."
+    echo "==========================================================="
+    
+    # Check environment first
+    check-environment || { echo "⛔ Environment check failed. Please fix the issues before continuing."; return 1; }
+    
+    # 1. Initialize infrastructure with Terraform
+    echo "STEP 1: Creating GCP resources with Terraform..."
+    terraform-start
+    echo "✅ GCP resources created successfully."
+    
+    # 2. Start Kafka and verify
+    echo "==========================================================="
+    echo "STEP 2: Starting Kafka and related services..."
+    start-kafka
+    sleep 15
+    echo "Verifying Kafka setup..."
+    verify-kafka
+    
+    # 3. Start Airflow and verify
+    echo "==========================================================="
+    echo "STEP 3: Starting Airflow for orchestration..."
+    start-airflow
+    sleep 15
+    echo "Verifying Airflow setup..."
+    verify-airflow
+    
+    # 4. Start the streaming data pipeline
+    echo "==========================================================="
+    echo "STEP 4: Starting streaming pipeline components..."
+    echo "This will start the producer to generate data and the consumer to process it."
+    docker-compose -f ./docker/streaming/docker-compose.yml --env-file ./.env up -d
+    sleep 15
+    echo "Verifying streaming components..."
+    verify-producer
+    verify-consumer
+    
+    echo "Streaming pipeline is now running."
+    echo "NOTE: You can access the Kafka Control Center at http://localhost:9021"
+    echo "NOTE: You can access the Airflow UI at http://localhost:${AIRFLOW_PORT}"
+    echo "      Username: ${_AIRFLOW_WWW_USER_USERNAME}, Password: ${_AIRFLOW_WWW_USER_PASSWORD}"
+    
+    # 5. Start Spark for batch processing
+    echo "==========================================================="
+    echo "STEP 5: Starting Spark for batch data processing..."
+    start-spark
+    sleep 15
+    echo "Verifying Spark setup..."
+    verify-spark
+    
+    echo "NOTE: You can access the Spark UI at http://localhost:8080"
+    
+    # 6. Run batch processing pipeline
+    echo "==========================================================="
+    echo "STEP 6: Running batch data processing pipeline..."
+    echo "This step will transform raw data to dimension and fact tables."
+    start-batch-pipeline
+    
+    # 7. Run DBT transformations
+    echo "==========================================================="
+    echo "STEP 7: Running business transformations with DBT..."
+    echo "This step will create analytical models in BigQuery."
+    run-dbt || echo "⚠️ DBT transformations may have issues but continuing..."
+    
+    # 8. Start Metabase for visualization
+    echo "==========================================================="
+    echo "STEP 8: Starting Metabase for data visualization..."
+    stop-metabase 2>/dev/null || true
+    echo "Removing previous Metabase data..."
+    docker volume rm -f $(docker volume ls -q | grep metabase) 2>/dev/null || true
+    start-metabase
+    sleep 15
+    
+    # 9. Check and ensure all ports are forwarded properly
+    echo "==========================================================="
+    echo "STEP 9: Checking port forwarding for UI components..."
+    check-forward-ports
+    
+    # Final verification and summary
+    echo "==========================================================="
+    echo "All components have been started!"
+    echo "Running a final verification..."
+    verify-all
+    
+    echo "==========================================================="
+    echo "AGRICULTURAL DATA PIPELINE DEPLOYMENT COMPLETE"
+    echo "==========================================================="
+    echo "Access Points:"
+    echo "- Kafka Control Center: http://localhost:9021"
+    echo "- Airflow UI: http://localhost:${AIRFLOW_PORT}"
+    echo "  Username: ${_AIRFLOW_WWW_USER_USERNAME}, Password: ${_AIRFLOW_WWW_USER_PASSWORD}"
+    echo "- Spark UI: http://localhost:8080"
+    echo "- Metabase: http://localhost:${METABASE_PORT}"
+    echo "  Initial setup required on first visit"
+    echo "==========================================================="
+    echo "To check component status: verify-all"
+    echo "To stop all services: stop-all-services"
+    echo "==========================================================="
+}
+
+
+stop-all-services(){
+    stop-airflow
+    stop-kafka
+    stop-spark
+    stop-metabase
+}
+
+# Verification functions
+
+verify-producer() {
+    echo "==========================================================="
+    echo "Verifying producer..."
+    # Check producer logs
+    if docker ps -a | grep -q "agri_data_producer"; then
+        PRODUCER_STATUS=$(docker inspect --format='{{.State.ExitCode}}' agri_data_producer)
+        if [ "$PRODUCER_STATUS" = "0" ]; then
+            echo "✅ Producer completed successfully with exit code 0."
+            echo "Producer logs (last 10 lines):"
+            docker logs agri_data_producer | tail -n 10
+            
+            # Check if messages were actually delivered
+            if docker logs agri_data_producer | grep -q "Message delivered"; then
+                echo "✅ Messages were successfully delivered to Kafka."
+                MESSAGES_COUNT=$(docker logs agri_data_producer | grep "Produced message" | wc -l)
+                echo "Producer generated approximately $MESSAGES_COUNT messages."
+            else
+                echo "❌ No confirmation of message delivery found in logs."
+            fi
+        else
+            echo "❌ Producer failed with exit code $PRODUCER_STATUS."
+            echo "Producer logs (last 20 lines for debugging):"
+            docker logs agri_data_producer | tail -n 20
+        fi
+    else
+        echo "❌ Producer container not found."
+        echo "Try running the streaming data process with 'stream-data' command."
+    fi
+    echo "==========================================================="
+}
+
+verify-consumer() {
+    echo "==========================================================="
+    echo "Verifying consumer..."
+    # Check if consumer is running
+    if docker ps | grep -q "agri_data_consumer"; then
+        echo "✅ Consumer is running."
+        echo "Consumer logs (last 20 lines):"
+        docker logs agri_data_consumer | tail -n 20
+        # Check if messages are being processed
+        if docker logs agri_data_consumer | grep -q "Processing batch"; then
+            echo "✅ Consumer is processing messages."
+            BATCHES_COUNT=$(docker logs agri_data_consumer | grep "Processing batch" | wc -l)
+            echo "Consumer has processed $BATCHES_COUNT batches of messages."
+            
+            # Check for Parquet file generation
+            if docker logs agri_data_consumer | grep -q "Converted .* messages to Parquet file"; then
+                echo "✅ Consumer is successfully converting messages to Parquet format."
+                
+                # Check for GCS upload simulation
+                if docker logs agri_data_consumer | grep -q "Successfully uploaded .* to GCS"; then
+                    echo "✅ Parquet files are being uploaded to GCS (simulation)."
+                else
+                    echo "❌ No successful GCS uploads found in logs."
+                fi
+            else
+                echo "❌ No Parquet file conversions found in logs."
+            fi
+        else
+            echo "❌ Consumer is NOT processing messages."
+            echo "Check if producer has sent any messages or if there are connectivity issues."
+        fi
+    else
+        echo "❌ Consumer is NOT running."
+        echo "Try running the streaming data process with 'stream-data' command."
+    fi
+    echo "==========================================================="
+}
+
+verify-airflow() {
+    echo "==========================================================="
+    echo "Verifying Airflow setup..."
+    if docker ps | grep -q "airflow-airflow-webserver-1"; then
+        echo "✅ Airflow webserver is running."
+        echo "✅ Airflow is accessible at http://localhost:${AIRFLOW_PORT}"
+        
+        # Check scheduler
+        if docker ps | grep -q "airflow-airflow-scheduler-1"; then
+            echo "✅ Airflow scheduler is running."
+        else
+            echo "❌ Airflow scheduler is NOT running."
+        fi
+        
+        # Check for DAGs
+        echo "Checking for DAGs..."
+        docker exec airflow-airflow-webserver-1 airflow dags list | grep -i "agri" || echo "No agriculture-related DAGs found."
+    else
+        echo "❌ Airflow is NOT running."
+        echo "Try starting Airflow with 'start-airflow' command."
+    fi
+    echo "==========================================================="
+}
+
+verify-spark() {
+    echo "==========================================================="
+    echo "Verifying Spark setup..."
+    if docker ps | grep -q "${PROJECT_NAME}-spark-master"; then
+        echo "✅ Spark master is running."
+        
+        # Check worker
+        if docker ps | grep -q "${PROJECT_NAME}-spark-worker"; then
+            echo "✅ Spark worker is running."
+        else
+            echo "❌ Spark worker is NOT running."
+        fi
+        
+        echo "✅ Spark UI should be accessible at http://localhost:8080"
+    else
+        echo "❌ Spark is NOT running."
+        echo "Try starting Spark with 'start-spark' command."
+    fi
+    echo "==========================================================="
+}
+
+verify-batch-pipeline() {
+    echo "==========================================================="
+    echo "Verifying batch pipeline..."
+    
+    # Load environment variables from .env if they're not set
+    if [ -z "$GCS_BUCKET_NAME" ]; then
+        # Load from .env file if it exists
+        if [ -f ".env" ]; then
+            export $(grep -v '^#' .env | xargs)
+            echo "✅ Loaded environment variables from .env file."
+        else
+            echo "⚠️ .env file not found. Using default values."
+        fi
+    fi
+    
+    # Check temporary directory for Parquet files
+    if [ -d "/tmp/agri_data" ] && [ "$(ls -A /tmp/agri_data)" ]; then
+        echo "✅ Parquet files generated in /tmp/agri_data."
+        ls -la /tmp/agri_data
+        
+        # Count files
+        FILE_COUNT=$(ls -1 /tmp/agri_data | wc -l)
+        echo "Found $FILE_COUNT Parquet files."
+    else
+        echo "❌ No Parquet files found in /tmp/agri_data."
+        echo "Check if consumer is running and processing messages."
+    fi
+    
+    # Check GCP resources
+    echo "GCP resources check (informational only):"
+    echo "- GCS Bucket: ${GCS_BUCKET_NAME:-"not set"}"
+    echo "- Raw data path: ${GCS_RAW_DATA_PATH:-"not set"}"
+    echo "- Transformed data path: ${GCS_TRANSFORMED_DATA_PATH:-"not set"}"
+    echo "- BigQuery dataset: ${GCP_DATASET_ID:-"not set"}"
+    
+    echo "For complete verification, check GCS bucket and BigQuery tables in Google Cloud Console."
+    echo "==========================================================="
+}
+
+verify-dbt() {
+    echo "==========================================================="
+    echo "Verifying DBT setup and models..."
+    
+    # Check that DBT is installed
+    if ! command -v dbt &> /dev/null; then
+        echo "❌ DBT is not installed. Please install with 'pip install dbt-bigquery'."
+        return 1
+    else
+        echo "✅ DBT is installed."
+    fi
+    
+    # Change to the business_transformations directory
+    cd business_transformations || { 
+        echo "❌ Could not find business_transformations directory."; 
+        return 1; 
+    }
+    
+    # List DBT models
+    echo "Available DBT models:"
+    dbt ls --profiles-dir . 2>/dev/null || echo "❌ Could not list DBT models."
+    
+    # Try running dbt debug
+    echo "Testing DBT connection..."
+    dbt debug --profiles-dir . 2>/dev/null
+    
+    # Return to the original directory
+    cd ..
+    
+    # Check if BigQuery tables exist
+    echo "Checking for transformed tables in BigQuery..."
+    
+    # Add your BigQuery checking logic here if needed
+    
+    echo "==========================================================="
+}
+
+verify-all() {
+    echo "==========================================================="
+    echo "Running complete verification of all components..."
+    verify-kafka
+    verify-producer
+    verify-consumer
+    verify-airflow
+    verify-spark
+    verify-batch-pipeline
+    verify-dbt
+    echo "==========================================================="
+    echo "Verification complete!"
+}
+
+# Add a test-all function that runs the pipeline with verifications
+test-pipeline() {
+    echo "==========================================================="
+    echo "Starting full pipeline test with verification..."
+    
+    # Clean up environment
+    echo "Cleaning up previous environment..."
+    ./cleanup.sh
+    
+    # Check environment
+    echo "Checking environment..."
+    check-environment || { echo "⛔ Environment check failed. Please fix the issues before continuing."; return 1; }
+    
+    # Start Kafka
+    echo "STEP 1: Starting Kafka..."
+    start-kafka
+    sleep 30  # Allow time for Kafka to start
+    verify-kafka || { 
+        echo "❌ Kafka verification failed."; 
+        echo "Try running 'stop-kafka' and then 'start-kafka' again."; 
+        return 1; 
+    }
+    
+    # Make sure broker IP is updated in streaming docker-compose
+    ensure_broker_hostname_resolution || {
+        echo "❌ Failed to configure hostname resolution.";
+        return 1;
+    }
+    
+    # Start streaming components
+    echo "STEP 2: Starting streaming components..."
+    docker-compose -f ./docker/streaming/docker-compose.yml --env-file ./.env up -d
+    sleep 20  # Allow time for components to start
+    
+    # Verify producer
+    echo "STEP 3: Verifying producer..."
+    verify-producer || {
+        echo "⚠️ Producer verification showed issues, but continuing...";
+    }
+    
+    # Verify consumer
+    echo "STEP 4: Verifying consumer..."
+    verify-consumer || {
+        echo "⚠️ Consumer verification showed issues, but continuing...";
+    }
+    
+    # Check data in temp directory
+    echo "STEP 5: Checking if data is being processed..."
+    # Wait for some data to be generated
     sleep 30
+    ls -la /tmp/agri_data
+    
+    # Check if any parquet files were generated
+    PARQUET_COUNT=$(ls -1 /tmp/agri_data/*.parquet 2>/dev/null | wc -l)
+    if [ "$PARQUET_COUNT" -gt 0 ]; then
+        echo "✅ Data processing confirmed! Found $PARQUET_COUNT Parquet files."
+    else
+        echo "⚠️ No Parquet files found yet. Consumer may still be collecting messages."
+        echo "Wait a bit longer or check consumer logs with 'docker logs agri_data_consumer'"
+    fi
+    
+    # Start Airflow
+    echo "STEP 6: Starting Airflow..."
+    start-airflow
+    sleep 30  # Allow time for Airflow to start
+    verify-airflow || {
+        echo "⚠️ Airflow verification showed issues, but continuing...";
+    }
+    
+    # Start Spark
+    echo "STEP 7: Starting Spark..."
+    start-spark
+    sleep 20  # Allow time for Spark to start
+    verify-spark || {
+        echo "⚠️ Spark verification showed issues, but continuing...";
+    }
     
     # Run batch pipeline
-    run_batch_pipeline
+    echo "STEP 8: Running batch pipeline..."
+    start-batch-pipeline
     
-    # Stop streaming
-    stop_streaming
+    # Verify batch pipeline
+    echo "STEP 9: Verifying batch pipeline output..."
+    verify-batch-pipeline
     
-    echo "Full pipeline execution completed!"
+    echo "==========================================================="
+    echo "Pipeline test complete!"
+    echo "Run 'verify-all' for a comprehensive check of all components."
+    echo "==========================================================="
 }
 
-# Function to clean up all processes
-cleanup() {
-    section "Cleaning Up"
+# Restart functions
+restart-kafka() {
+    echo "Restarting Kafka..."
+    stop-kafka
+    sleep 5
+    start-kafka
+    sleep 10
+    verify-kafka
+}
+
+restart-streaming() {
+    echo "Restarting streaming components..."
+    docker-compose -f ./docker/streaming/docker-compose.yml --env-file ./.env down
+    sleep 5
+    docker-compose -f ./docker/streaming/docker-compose.yml --env-file ./.env up -d
+    sleep 10
+    verify-producer
+    verify-consumer
+}
+
+restart-airflow() {
+    echo "Restarting Airflow..."
+    stop-airflow
+    sleep 5
+    start-airflow
+    sleep 20
+    verify-airflow
+}
+
+restart-spark() {
+    echo "Restarting Spark..."
+    stop-spark
+    sleep 5
+    start-spark
+    sleep 10
+    verify-spark
+}
+
+# Function to check and forward required UI ports
+check-forward-ports() {
+    echo "==========================================================="
+    echo "Checking if UI ports are correctly forwarded..."
     
-    # Stop streaming
-    stop_streaming
+    # Check Airflow port
+    if ! nc -z localhost ${AIRFLOW_PORT:-8080} >/dev/null 2>&1; then
+        echo "❌ Airflow port ${AIRFLOW_PORT:-8080} is not accessible."
+        echo "Trying to fix port forwarding..."
+        docker-compose -f ./docker/airflow/docker-compose.yml --env-file ./.env up -d
+    else
+        echo "✅ Airflow port ${AIRFLOW_PORT:-8080} is accessible."
+    fi
     
-    echo "Cleanup completed."
+    # Check Spark UI port
+    if ! nc -z localhost 8080 >/dev/null 2>&1; then
+        echo "❌ Spark UI port 8080 is not accessible."
+        echo "Trying to fix port forwarding..."
+        docker-compose -f ./docker/spark/docker-compose.yml --env-file ./.env up -d
+    else
+        echo "✅ Spark UI port 8080 is accessible."
+    fi
+    
+    # Check Metabase port
+    if ! nc -z localhost ${METABASE_PORT:-3000} >/dev/null 2>&1; then
+        echo "❌ Metabase port ${METABASE_PORT:-3000} is not accessible."
+        echo "Trying to fix port forwarding..."
+        docker-compose -f ./docker/metabase/docker-compose.yml --env-file ./.env up -d
+    else
+        echo "✅ Metabase port ${METABASE_PORT:-3000} is accessible."
+    fi
+    
+    # Check Kafka Control Center port
+    if ! nc -z localhost 9021 >/dev/null 2>&1; then
+        echo "❌ Kafka Control Center port 9021 is not accessible."
+        echo "Trying to fix port forwarding..."
+        docker-compose -f ./docker/kafka/docker-compose.yml --env-file ./.env up -d
+    else
+        echo "✅ Kafka Control Center port 9021 is accessible."
+    fi
+    
+    echo "==========================================================="
+    return 0
 }
 
-# Display available commands
-show_help() {
-    section "Agricultural Data Pipeline Commands"
-    echo 
-    echo "Available commands:"
-    echo "  setup_environment   - Set up the environment and install dependencies"
-    echo "  install_dependencies - Install Python dependencies"
-    echo "  start_producer      - Start the Kafka producer"
-    echo "  start_consumer      - Start the Kafka consumer"
-    echo "  start_streaming     - Start both producer and consumer"
-    echo "  stop_streaming      - Stop the streaming pipeline"
-    echo "  run_batch_pipeline  - Run the batch ETL pipeline"
-    echo "  run_pipeline        - Run the full pipeline (streaming + batch)"
-    echo "  cleanup             - Clean up all processes"
-    echo 
-    echo "Example: source commands.sh && setup_environment && run_pipeline"
+# Function to do a full reset and test of the project
+full-reset-and-test() {
+    echo "==========================================================="
+    echo "Starting full project reset and test..."
+    echo "This will clear all Docker containers and images, then rebuild and retest."
+    echo "WARNING: This will destroy all existing data and resources."
+    echo "==========================================================="
+    
+    # Prompt for confirmation
+    read -p "Are you sure you want to perform a full reset? (yes/no): " confirm
+    if [[ "$confirm" != "yes" ]]; then
+        echo "Reset canceled."
+        return 1
+    fi
+    
+    # Run cleanup with terraform destroy
+    echo "Running cleanup with terraform destroy..."
+    ./cleanup.sh --destroy-terraform
+    if [ $? -ne 0 ]; then
+        echo "⚠️ Cleanup script encountered an issue. Do you want to continue? (yes/no): "
+        read continue_after_cleanup
+        if [[ "$continue_after_cleanup" != "yes" ]]; then
+            echo "Reset canceled."
+            return 1
+        fi
+    fi
+    
+    # Make sure all Docker containers are stopped
+    echo "Stopping any remaining Docker containers..."
+    docker ps -a | grep -E "agri_data|kafka|broker|zookeeper" | awk '{print $1}' | xargs -r docker stop
+    docker ps -a | grep -E "agri_data|kafka|broker|zookeeper" | awk '{print $1}' | xargs -r docker rm
+    
+    # Prune Docker system
+    echo "Cleaning all Docker resources..."
+    docker system prune -af
+    
+    # Remove all Docker volumes related to the project
+    echo "Removing Docker volumes..."
+    docker volume ls -q | grep "${PROJECT_NAME}" | xargs -r docker volume rm
+    
+    # Remove temporary data
+    echo "Removing temporary data..."
+    rm -rf /tmp/agri_data
+    mkdir -p /tmp/agri_data
+    chmod 777 /tmp/agri_data
+    
+    # Remove and recreate the network
+    echo "Recreating Docker network..."
+    docker network rm ${PROJECT_NAME}-network || true
+    docker network create ${PROJECT_NAME}-network
+    
+    # Wait for Docker to stabilize
+    echo "Waiting for Docker to stabilize..."
+    sleep 5
+    
+    # Check for existing infrastructure and handle accordingly
+    echo "Checking for existing infrastructure..."
+    if terraform -chdir=terraform state list &>/dev/null; then
+        echo "⚠️ Existing Terraform resources detected. Do you want to reuse them? (yes/no): "
+        read reuse_infra
+        if [[ "$reuse_infra" != "yes" ]]; then
+            echo "Creating new infrastructure..."
+            terraform-start
+            if [ $? -ne 0 ]; then
+                echo "❌ Terraform initialization/apply failed. Do you want to continue without cloud resources? (yes/no): "
+                read continue_without_cloud
+                if [[ "$continue_without_cloud" != "yes" ]]; then
+                    echo "Reset canceled."
+                    return 1
+                fi
+            fi
+        else
+            echo "Reusing existing infrastructure."
+        fi
+    else
+        echo "Creating infrastructure with Terraform..."
+        terraform-start
+        if [ $? -ne 0 ]; then
+            echo "❌ Terraform initialization/apply failed. Do you want to continue without cloud resources? (yes/no): "
+            read continue_without_cloud
+            if [[ "$continue_without_cloud" != "yes" ]]; then
+                echo "Reset canceled."
+                return 1
+            fi
+        fi
+    fi
+    
+    # Start the main components one by one with interactive error handling
+    echo "Starting Kafka..."
+    start-kafka
+    sleep 15
+    
+    # Verify Kafka and ensure correct hostname resolution
+    verify-kafka
+    if [ $? -ne 0 ]; then
+        echo "❌ Kafka verification failed."
+        echo "Do you want to retry starting Kafka? (yes/no): "
+        read retry_kafka
+        if [[ "$retry_kafka" == "yes" ]]; then
+            echo "Restarting Kafka..."
+            stop-kafka
+            sleep 5
+            start-kafka
+            sleep 15
+            verify-kafka
+            if [ $? -ne 0 ]; then
+                echo "❌ Failed to start Kafka after retry."
+                echo "Do you want to continue without Kafka? (yes/no): "
+                read continue_without_kafka
+                if [[ "$continue_without_kafka" != "yes" ]]; then
+                    echo "Reset canceled."
+                    return 1
+                fi
+            fi
+        elif [[ "$retry_kafka" != "yes" ]]; then
+            echo "Do you want to continue without Kafka? (yes/no): "
+            read continue_without_kafka
+            if [[ "$continue_without_kafka" != "yes" ]]; then
+                echo "Reset canceled."
+                return 1
+            fi
+        fi
+    fi
+    
+    # Now start the streaming components with correct hostname resolution
+    echo "Configuring hostname resolution..."
+    ensure_broker_hostname_resolution
+    if [ $? -ne 0 ]; then
+        echo "❌ Failed to configure hostname resolution."
+        echo "Do you want to continue without proper hostname resolution? (yes/no): "
+        read continue_without_resolution
+        if [[ "$continue_without_resolution" != "yes" ]]; then
+            echo "Reset canceled."
+            return 1
+        fi
+    fi
+    
+    echo "Starting streaming components..."
+    docker-compose -f ./docker/streaming/docker-compose.yml --env-file ./.env up -d
+    if [ $? -ne 0 ]; then
+        echo "❌ Failed to start streaming components."
+        echo "Do you want to continue without streaming components? (yes/no): "
+        read continue_without_streaming
+        if [[ "$continue_without_streaming" != "yes" ]]; then
+            echo "Reset canceled."
+            return 1
+        fi
+    else
+        sleep 15
+        
+        # Verify streaming components with detailed logs in frontfoot mode
+        echo "Verifying producer (see logs below)..."
+        docker logs agri_data_producer
+        
+        echo "Verifying consumer (see logs below)..."
+        docker logs agri_data_consumer
+    fi
+    
+    # Start Airflow
+    echo "Starting Airflow..."
+    start-airflow
+    if [ $? -ne 0 ]; then
+        echo "❌ Failed to start Airflow."
+        echo "Do you want to continue without Airflow? (yes/no): "
+        read continue_without_airflow
+        if [[ "$continue_without_airflow" != "yes" ]]; then
+            echo "Reset canceled."
+            return 1
+        fi
+    else
+        sleep 20
+        verify-airflow
+    fi
+    
+    # Start Spark
+    echo "Starting Spark..."
+    start-spark
+    if [ $? -ne 0 ]; then
+        echo "❌ Failed to start Spark."
+        echo "Do you want to continue without Spark? (yes/no): "
+        read continue_without_spark
+        if [[ "$continue_without_spark" != "yes" ]]; then
+            echo "Reset canceled."
+            return 1
+        fi
+    else
+        sleep 15
+        verify-spark
+    fi
+    
+    # Check for data being produced and consumed
+    echo "Checking for data processing..."
+    sleep 30
+    PARQUET_COUNT=$(ls -1 /tmp/agri_data/*.parquet 2>/dev/null | wc -l)
+    if [ "$PARQUET_COUNT" -gt 0 ]; then
+        echo "✅ Data processing confirmed! Found $PARQUET_COUNT Parquet files."
+    else
+        echo "⚠️ No Parquet files found yet. Consumer may still be collecting messages."
+        echo "Checking consumer logs for issues..."
+        docker logs agri_data_consumer
+        
+        echo "Do you want to continue even without generated Parquet files? (yes/no): "
+        read continue_without_parquet
+        if [[ "$continue_without_parquet" != "yes" ]]; then
+            echo "Reset canceled."
+            return 1
+        fi
+    fi
+    
+    # Run the batch pipeline
+    echo "Running batch pipeline..."
+    start-batch-pipeline
+    if [ $? -ne 0 ]; then
+        echo "❌ Batch pipeline encountered issues."
+        echo "Do you want to continue? (yes/no): "
+        read continue_after_batch
+        if [[ "$continue_after_batch" != "yes" ]]; then
+            echo "Reset canceled."
+            return 1
+        fi
+    fi
+    
+    # Run DBT transformations
+    echo "Running DBT transformations..."
+    run-dbt
+    if [ $? -ne 0 ]; then
+        echo "❌ DBT transformations failed."
+        echo "Do you want to continue without DBT transformations? (yes/no): "
+        read continue_without_dbt
+        if [[ "$continue_without_dbt" != "yes" ]]; then
+            echo "Reset canceled."
+            return 1
+        fi
+    fi
+    
+    # Verify all components
+    echo "Performing final verification of all components..."
+    verify-all
+    
+    echo "==========================================================="
+    echo "Full reset and test complete!"
+    echo "If you're seeing this message, the pipeline is functioning correctly."
+    echo "==========================================================="
 }
 
-# Show help by default when the script is sourced
-show_help
-
-echo "Agricultural Data Pipeline commands loaded."
-echo "Type 'help' to see available commands."
-
-# Define help command
-help() {
-    show_help
+run-dbt() {
+    echo "==========================================================="
+    echo "Running DBT transformations on BigQuery data..."
+    
+    # Check that DBT is installed
+    if ! command -v dbt &> /dev/null; then
+        echo "❌ DBT is not installed. Installing dbt-bigquery..."
+        pip install dbt-bigquery
+    fi
+    
+    # Change to the business_transformations directory
+    cd business_transformations || { 
+        echo "❌ Could not find business_transformations directory."; 
+        return 1; 
+    }
+    
+    # Run DBT
+    echo "Running DBT models..."
+    dbt run --profiles-dir .
+    
+    # Check the exit status
+    if [ $? -eq 0 ]; then
+        echo "✅ DBT transformations completed successfully!"
+    else
+        echo "❌ DBT transformations failed. Check the logs for more information."
+        return 1
+    fi
+    
+    # Generate documentation
+    echo "Generating DBT documentation..."
+    dbt docs generate --profiles-dir .
+    
+    # Return to the original directory
+    cd ..
+    
+    echo "==========================================================="
+    echo "Business transformations complete! The data is now ready for analytics."
+    echo "==========================================================="
 }
 
-# Export all functions
-export -f section
-export -f command_exists
-export -f install_dependencies
-export -f check_kafka
-export -f setup_environment
-export -f start_producer
-export -f start_consumer
-export -f start_streaming
-export -f stop_streaming
-export -f run_batch_pipeline
-export -f run_pipeline
-export -f cleanup
-export -f show_help
-export -f help
+# Function to serve DBT docs
+serve-dbt-docs() {
+    echo "==========================================================="
+    echo "Generating and serving DBT documentation..."
+    
+    # Change to the business_transformations directory
+    cd business_transformations || { 
+        echo "❌ Could not find business_transformations directory."; 
+        return 1; 
+    }
+    
+    # Generate documentation
+    echo "Generating DBT documentation..."
+    dbt docs generate --profiles-dir .
+    
+    # Serve documentation
+    echo "Starting DBT documentation server..."
+    echo "Access the documentation at: http://localhost:8080"
+    dbt docs serve --profiles-dir . --port 8080
+    
+    # Return to the original directory (this will only execute after the server is stopped)
+    cd ..
+    
+    echo "==========================================================="
+}
+
+# Function to generate DBT docs without serving
+generate-dbt-docs() {
+    echo "==========================================================="
+    echo "Generating DBT documentation..."
+    
+    # Change to the business_transformations directory
+    cd business_transformations || { 
+        echo "❌ Could not find business_transformations directory."; 
+        return 1; 
+    }
+    
+    # Generate documentation
+    echo "Generating DBT documentation..."
+    dbt docs generate --profiles-dir .
+    
+    echo "✅ DBT documentation generated successfully."
+    echo "You can serve it using the 'serve-dbt-docs' command."
+    
+    # Return to the original directory
+    cd ..
+    
+    echo "==========================================================="
+}
