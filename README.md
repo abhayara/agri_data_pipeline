@@ -25,6 +25,25 @@ The rebuild script will:
 4. Rebuild and restart all services with proper settings
 5. Create Git checkpoints along the way
 
+## Service Ports
+
+| Service | Port | Description |
+|---------|------|-------------|
+| Kafka Broker | 9092 | Kafka message broker |
+| Schema Registry | 8081 | Confluent Schema Registry |
+| Zookeeper | 2181 | Zookeeper service |
+| Kafka Control Center | 9021 | Confluent Control Center UI |
+| Kafka REST Proxy | 8082 | Kafka REST interface |
+| PostgreSQL | 5432 | Main PostgreSQL database |
+| PGAdmin | 5050 | PostgreSQL admin interface |
+| Airflow DB | 5433 | Airflow PostgreSQL database |
+| Airflow Webserver | 8080 | Airflow UI and API |
+| Spark Master UI | 8088 | Spark master web interface |
+| Spark Worker UI | 8089 | Spark worker web interface |
+| JupyterLab | 8890 | Jupyter notebook interface |
+| Metabase | 3010 | Metabase analytics dashboard |
+| DBT Docs | 8085 | DBT documentation server |
+
 ## Manual Setup and Commands
 
 For more granular control, you can source the `commands.sh` file and use individual commands:

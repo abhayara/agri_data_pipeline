@@ -71,9 +71,12 @@ serve-dbt-docs() {
     dbt docs generate --profiles-dir .
     
     # Serve documentation
-    echo "Starting DBT documentation server..."
-    echo "Access the documentation at: http://localhost:8080"
-    dbt docs serve --profiles-dir . --port 8080
+    echo "==========================================================="
+    echo "⚡ Starting DBT documentation server..."
+    echo "⚡ DBT DOCS SERVER: http://localhost:8085"
+    echo "⚡ Access the documentation at: http://localhost:8085"
+    echo "==========================================================="
+    dbt docs serve --profiles-dir . --port 8085
     
     # Return to the original directory (this will only execute after the server is stopped)
     cd ..
