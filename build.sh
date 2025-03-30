@@ -58,6 +58,22 @@ destroy_infrastructure() {
     
     echo -e "${YELLOW}Destroying Terraform resources...${NC}"
     if [ -d "./terraform" ]; then
+        # First, check if the BigQuery dataset configuration has delete_contents_on_destroy set
+        if ! grep -q "delete_contents_on_destroy = true" ./terraform/main.tf; then
+            echo -e "${YELLOW}Setting delete_contents_on_destroy=true for BigQuery dataset...${NC}"
+            # Add delete_contents_on_destroy to BigQuery dataset if not already present
+            sed -i '/resource "google_bigquery_dataset" "bigquery-dataset" {/,/}/s/}/  delete_contents_on_destroy = true\n}/' ./terraform/main.tf
+            
+            # Apply the change first
+            echo -e "${YELLOW}Applying configuration update...${NC}"
+            terraform -chdir=terraform apply -auto-approve
+            if [ $? -ne 0 ]; then
+                echo -e "${RED}Error updating Terraform configuration${NC}"
+                # Continue anyway to try the destroy
+            fi
+        fi
+        
+        # Now run the destroy command
         terraform -chdir=terraform destroy -auto-approve
         if [ $? -eq 0 ]; then
             echo -e "${GREEN}Terraform resources destroyed${NC}"

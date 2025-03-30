@@ -32,4 +32,5 @@ resource "google_bigquery_dataset" "bigquery-dataset" {
   dataset_id = var.bq_dataset_name
   location = var.location
   project = "agri-data-454414"
+  delete_contents_on_destroy = true
 }
