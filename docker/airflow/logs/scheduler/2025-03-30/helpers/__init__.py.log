@@ -1532,3 +1532,7 @@ sqlalchemy.exc.OperationalError: (psycopg2.OperationalError) connection to serve
 [2025-03-30T10:05:46.615+0000] {logging_mixin.py:149} INFO - [2025-03-30T10:05:46.615+0000] {dagbag.py:541} INFO - Filling up the DagBag from /opt/airflow/dags/helpers/__init__.py
 [2025-03-30T10:05:49.878+0000] {processor.py:838} WARNING - No viable dags retrieved from /opt/airflow/dags/helpers/__init__.py
 [2025-03-30T10:05:49.911+0000] {processor.py:179} INFO - Processing /opt/airflow/dags/helpers/__init__.py took 3.321 seconds
+[2025-03-30T10:13:02.519+0000] {processor.py:157} INFO - Started process (PID=252) to work on /opt/airflow/dags/helpers/__init__.py
+[2025-03-30T10:13:02.529+0000] {processor.py:826} INFO - Processing file /opt/airflow/dags/helpers/__init__.py for tasks to queue
+[2025-03-30T10:13:02.532+0000] {logging_mixin.py:149} INFO - [2025-03-30T10:13:02.532+0000] {dagbag.py:541} INFO - Filling up the DagBag from /opt/airflow/dags/helpers/__init__.py
+[2025-03-30T10:13:10.619+0000] {logging_mixin.py:149} INFO - [2025-03-30T10:13:10.619+0000] {process_utils.py:258} INFO - Waiting up to 5 seconds for processes to exit...

@@ -4935,3 +4935,7 @@ Traceback (most recent call last):
 sqlalchemy.exc.OperationalError: (psycopg2.OperationalError) connection to server at "postgres" (172.27.0.7), port 5432 failed: FATAL:  database "airflow" does not exist
 
 (Background on this error at: https://sqlalche.me/e/14/e3q8)
+[2025-03-30T10:13:02.194+0000] {processor.py:157} INFO - Started process (PID=247) to work on /opt/airflow/dags/gcs_to_bigquery_dag.py
+[2025-03-30T10:13:02.214+0000] {processor.py:826} INFO - Processing file /opt/airflow/dags/gcs_to_bigquery_dag.py for tasks to queue
+[2025-03-30T10:13:02.218+0000] {logging_mixin.py:149} INFO - [2025-03-30T10:13:02.218+0000] {dagbag.py:541} INFO - Filling up the DagBag from /opt/airflow/dags/gcs_to_bigquery_dag.py
+[2025-03-30T10:13:09.315+0000] {logging_mixin.py:149} INFO - [2025-03-30T10:13:09.315+0000] {process_utils.py:258} INFO - Waiting up to 5 seconds for processes to exit...

@@ -8,31 +8,33 @@ import os
 import socket
 import uuid
 import csv
+import sys
 
 # Configuration
-KAFKA_BROKER = "broker:29092"
-KAFKA_TOPIC = "agri_data"
+KAFKA_BROKER = os.environ.get("KAFKA_BROKER", "broker:29092")
+KAFKA_TOPIC = os.environ.get("KAFKA_TOPIC", "agri_data")
 NUM_MESSAGES = int(os.environ.get("NUM_MESSAGES", 100))
-MESSAGE_DELAY = float(os.environ.get("MESSAGE_DELAY", 0.01))
-
-# Use environment variable if provided, otherwise use default
-kafka_broker_env = os.environ.get("KAFKA_BROKER", KAFKA_BROKER)
+MESSAGE_DELAY = float(os.environ.get("MESSAGE_DELAY", 0.5))
 
 # Configuration for the Kafka producer
 producer_config = {
-    'bootstrap.servers': kafka_broker_env,
+    'bootstrap.servers': KAFKA_BROKER,
     'client.id': socket.gethostname(),
-    'debug': 'broker,topic,msg'
+    'message.timeout.ms': 10000,  # 10 seconds timeout
+    'request.timeout.ms': 5000,   # 5 seconds timeout
+    'retry.backoff.ms': 500,      # Retry every 500ms
+    'socket.keepalive.enable': True,
+    'debug': 'broker' # Reduce verbosity
 }
 
 print(f"Producer configuration: {producer_config}")
 print(f"Producer will send {NUM_MESSAGES} messages to topic {KAFKA_TOPIC} with delay {MESSAGE_DELAY}s")
-print(f"Broker address: {kafka_broker_env}")
+print(f"Broker address: {KAFKA_BROKER}")
 
 # Try to resolve the broker hostname
 try:
     print(f"Attempting to resolve broker hostname...")
-    broker_host = kafka_broker_env.split(':')[0]
+    broker_host = KAFKA_BROKER.split(':')[0]
     broker_ip = socket.gethostbyname(broker_host)
     print(f"✅ Resolved {broker_host} to {broker_ip}")
 except Exception as e:
@@ -443,36 +445,58 @@ def generate_record():
 
 def main():
     # Create Kafka producer
-    producer = Producer(producer_config)
+    producer = None
+    max_retries = 5
+    retry_count = 0
     
-    # Load schema
-    schema = load_schema()
-    print(f"Loaded schema with {len(schema)} fields")
+    while retry_count < max_retries:
+        try:
+            print(f"Attempt {retry_count + 1} to create Kafka producer...")
+            producer = Producer(producer_config)
+            # Test the connection
+            producer.list_topics(timeout=5.0)
+            print("✅ Successfully connected to Kafka")
+            break
+        except Exception as e:
+            print(f"❌ Failed to connect to Kafka: {e}")
+            retry_count += 1
+            if retry_count >= max_retries:
+                print("Failed to connect to Kafka after maximum retries")
+                sys.exit(1)
+            print(f"Retrying in {retry_count} seconds...")
+            time.sleep(retry_count)
     
     print(f"Starting to produce {NUM_MESSAGES} messages to topic {KAFKA_TOPIC}")
     
-    # Generate and send messages
+    # Generate and produce messages
     for i in range(NUM_MESSAGES):
-        # Generate a record
-        record = generate_record()
-        
-        # Serialize the record to JSON
-        message = json.dumps(record).encode('utf-8')
-        
-        # Send the message to Kafka
-        producer.produce(KAFKA_TOPIC, value=message, callback=delivery_report)
-        
-        # Flush the producer queue every 10 messages
-        if i % 10 == 0:
-            producer.flush()
+        try:
+            # Generate a record
+            record = generate_record()
             
-        print(f"Produced message {i+1}/{NUM_MESSAGES}")
-        
-        # Add a delay between messages
-        time.sleep(MESSAGE_DELAY)
+            # Serialize the record to JSON
+            message = json.dumps(record).encode('utf-8')
+            
+            # Print a sample of the messages (first 2 and every 10th)
+            if i < 2 or i % 10 == 0:
+                print(f"Producing message {i+1}/{NUM_MESSAGES}: {record['Farm_ID']} - {record['Crop_Type']} - {record['Crop_Variety']}")
+            
+            # Produce the message to Kafka with the callback
+            producer.produce(KAFKA_TOPIC, key=str(i), value=message, callback=delivery_report)
+            
+            # Flush to make sure the message is sent
+            if i % 10 == 0:
+                producer.flush(timeout=5.0)
+            
+            # Wait a bit between messages to simulate real-time data
+            time.sleep(MESSAGE_DELAY)
+            
+        except Exception as e:
+            print(f"Error producing message {i}: {e}")
+            time.sleep(1)
     
     # Flush any remaining messages
-    producer.flush()
+    producer.flush(timeout=10.0)
     print("All messages produced successfully!")
 
 if __name__ == "__main__":

@@ -87,7 +87,7 @@ ensure_broker_hostname_resolution() {
     echo "Ensuring broker hostname resolution in streaming components..."
     
     # Get current broker IP
-    BROKER_IP=$(docker inspect agri_data_pipeline-broker -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}')
+    BROKER_IP=$(docker inspect ${PROJECT_NAME}-broker -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}')
     
     if [ -z "$BROKER_IP" ]; then
         echo "❌ Could not detect broker IP address."
@@ -96,6 +96,20 @@ ensure_broker_hostname_resolution() {
     fi
     
     echo "✅ Detected broker IP: $BROKER_IP"
+    
+    # Extract the network subnet from the docker network inspect
+    NETWORK_SUBNET=$(docker network inspect ${PROJECT_NAME}-network | grep -o '"Subnet": "[^"]*"' | head -1 | cut -d '"' -f 4 | cut -d '/' -f 1 | cut -d '.' -f 1,2)
+    echo "✅ Detected network subnet: ${NETWORK_SUBNET}"
+    
+    # Update the .env file to use 0.0.0.0 for Kafka listeners
+    if grep -q "KAFKA_LISTENERS=PLAINTEXT://broker:29092" ./.env; then
+        echo "Updating Kafka listeners in .env file to use 0.0.0.0..."
+        sed -i 's/KAFKA_LISTENERS=PLAINTEXT:\/\/broker:29092/KAFKA_LISTENERS=PLAINTEXT:\/\/0.0.0.0:29092/g' ./.env
+        sed -i 's/PLAINTEXT_HOST:\/\/broker:9092/PLAINTEXT_HOST:\/\/0.0.0.0:9092/g' ./.env
+        echo "✅ Updated Kafka listeners in .env file."
+    else
+        echo "✅ Kafka listeners in .env file are already configured correctly."
+    fi
     
     # Update the streaming docker-compose file to use the correct broker IP
     if [ -f "./docker/streaming/docker-compose.yml" ]; then
@@ -107,6 +121,10 @@ ensure_broker_hostname_resolution() {
             # Use sed to replace the IP in the docker-compose file
             sed -i "s/broker:[0-9]\+\.[0-9]\+\.[0-9]\+\.[0-9]\+/broker:$BROKER_IP/g" ./docker/streaming/docker-compose.yml
             echo "✅ Updated broker IP in docker-compose file."
+            
+            # Record this change in git
+            git add ./docker/streaming/docker-compose.yml
+            git commit -m "Update broker IP to ${BROKER_IP} for proper network communication"
         else
             echo "✅ Broker IP in docker-compose file is already correct."
         fi
@@ -120,10 +138,36 @@ ensure_broker_hostname_resolution() {
     return 0
 }
 
-# Original verify-kafka function
+# Function to check and fix Kafka configuration
+check_fix_kafka_config() {
+    echo "==========================================================="
+    echo "Checking and fixing Kafka configuration..."
+    
+    # Ensure the .env file has the correct listener configuration
+    if ! grep -q "KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:29092" ./.env; then
+        echo "Updating Kafka listener configuration for better network compatibility..."
+        sed -i 's/KAFKA_LISTENERS=.*$/KAFKA_LISTENERS=PLAINTEXT:\/\/0.0.0.0:29092,PLAINTEXT_HOST:\/\/0.0.0.0:9092/g' ./.env
+        echo "✅ Updated Kafka listener configuration in .env file."
+        
+        # Record this change in git
+        git add ./.env
+        git commit -m "Update Kafka listener configuration for better network compatibility"
+    else
+        echo "✅ Kafka listener configuration is already optimized in .env file."
+    fi
+    
+    echo "==========================================================="
+    return 0
+}
+
+# Modified verify-kafka function to include configuration check and fix
 verify-kafka() {
     echo "==========================================================="
     echo "Verifying Kafka setup..."
+    
+    # First, check and fix configuration if needed
+    check_fix_kafka_config
+    
     # Check if broker container is running
     if docker ps | grep -q "${PROJECT_NAME}-broker"; then
         echo "✅ Kafka broker is running."
@@ -132,7 +176,7 @@ verify-kafka() {
         ensure_broker_hostname_resolution
         
         # Check if topics can be listed
-        TOPICS=$(docker exec ${PROJECT_NAME}-broker kafka-topics --bootstrap-server broker:29092 --list)
+        TOPICS=$(docker exec ${PROJECT_NAME}-broker kafka-topics --bootstrap-server localhost:29092 --list)
         if [ $? -eq 0 ]; then
             echo "✅ Kafka broker is accessible and functional."
             echo "Available topics:"
@@ -143,12 +187,12 @@ verify-kafka() {
                 echo "✅ Topic 'agri_data' exists."
                 # Get topic details
                 echo "Topic details:"
-                docker exec ${PROJECT_NAME}-broker kafka-topics --bootstrap-server broker:29092 --describe --topic agri_data
+                docker exec ${PROJECT_NAME}-broker kafka-topics --bootstrap-server localhost:29092 --describe --topic agri_data
             else
                 echo "❌ Topic 'agri_data' does not exist yet."
                 # Create the topic if it doesn't exist
                 echo "Creating 'agri_data' topic..."
-                docker exec ${PROJECT_NAME}-broker kafka-topics --bootstrap-server broker:29092 --create --topic agri_data --partitions 1 --replication-factor 1 --if-not-exists
+                docker exec ${PROJECT_NAME}-broker kafka-topics --bootstrap-server localhost:29092 --create --topic agri_data --partitions 1 --replication-factor 1 --if-not-exists
                 if [ $? -eq 0 ]; then
                     echo "✅ Topic 'agri_data' created successfully."
                 else
@@ -171,13 +215,76 @@ verify-kafka() {
     return 0
 }
 
-# Update start-streaming-pipeline function to include hostname resolution check
-start-streaming-pipeline(){
+# Git checkpoint function to save project state
+git_checkpoint() {
+    local message="$1"
+    if [ -z "$message" ]; then
+        message="Automatic checkpoint - project state saved"
+    fi
+    
+    git add .
+    git commit -m "$message"
+    echo "✅ Git checkpoint created: $message"
+}
+
+# Add a function to restart Kafka after configuration changes
+restart-kafka-with-config() {
     echo "==========================================================="
-    echo "Starting the streaming data pipeline..."
+    echo "Restarting Kafka with updated configuration..."
+    
+    # Stop Kafka first
+    stop-kafka
+    
+    # Check and fix configuration
+    check_fix_kafka_config
+    
+    # Start Kafka with the updated configuration
+    start-kafka
+    
+    # Verify Kafka is working properly
+    verify-kafka
+    
+    echo "==========================================================="
+    return 0
+}
+
+# Function to start the Kafka services with configuration verification
+start-kafka() {
+    echo "==========================================================="
+    echo "Starting Kafka services with configuration verification..."
+    
+    # Check and fix configuration before starting
+    check_fix_kafka_config
+    
+    # Start Kafka services
+    docker-compose -f ./docker/kafka/docker-compose.yml --env-file ./.env up -d
+    
+    # Wait for services to be ready
+    echo "Waiting for Kafka services to start..."
+    sleep 10
+    
+    # Verify Kafka services are running
+    if docker ps | grep -q "${PROJECT_NAME}-broker"; then
+        echo "✅ Kafka broker is running."
+    else
+        echo "❌ Kafka broker failed to start. Check the logs with 'docker logs ${PROJECT_NAME}-broker'"
+        return 1
+    fi
+    
+    echo "==========================================================="
+    return 0
+}
+
+# Updated function with automatic IP resolution and git checkpoints
+start-streaming-pipeline() {
+    echo "==========================================================="
+    echo "Starting the streaming data pipeline with automatic IP resolution..."
     
     # Check environment first
     check-environment || { echo "⛔ Environment check failed. Please fix the issues before continuing."; return 1; }
+    
+    # Make sure .env has the right configuration
+    check_fix_kafka_config
     
     # Start Kafka
     echo "Starting Kafka services..."
@@ -187,20 +294,18 @@ start-streaming-pipeline(){
     echo "Waiting for Kafka to be ready..."
     sleep 15
     
-    # Verify Kafka is running correctly
-    echo "Verifying Kafka setup..."
+    # Verify Kafka is running correctly and ensure hostname resolution
+    echo "Verifying Kafka setup and network configuration..."
     verify-kafka || { 
-        echo "⛔ Kafka verification failed. Please check the logs and fix any issues."; 
-        echo "You can try restarting Kafka with 'start-kafka' or check logs with 'docker logs ${PROJECT_NAME}-broker'";
-        return 1; 
+        echo "⛔ Kafka verification failed. Attempting to fix configuration and restart..."; 
+        restart-kafka-with-config || {
+            echo "⛔ Kafka configuration fix failed. Please check the logs and fix manually.";
+            return 1;
+        }
     }
     
-    # Ensure broker hostname resolution is configured properly
-    echo "Configuring broker hostname resolution..."
-    ensure_broker_hostname_resolution || {
-        echo "⛔ Failed to configure hostname resolution. Please check network settings.";
-        return 1;
-    }
+    # Create a git checkpoint after successful Kafka configuration
+    git_checkpoint "Kafka configuration verified and optimized"
     
     # Start Airflow for orchestration
     echo "Starting Airflow services..."
@@ -210,14 +315,14 @@ start-streaming-pipeline(){
     echo "Waiting for Airflow to be ready..."
     sleep 20
     
-    # Start the streaming components with logs in current terminal
-    echo "Starting data producer and consumer in foreground mode..."
+    # Build and start the streaming components with logs in current terminal
+    echo "Building and starting data producer and consumer..."
     echo "You'll see logs in this terminal. Press Ctrl+C to stop."
     echo "Wait 5 seconds before starting... (Ctrl+C now to abort)"
     sleep 5
     
     # Run in current terminal with logs visible
-    docker-compose -f ./docker/streaming/docker-compose.yml --env-file ./.env up
+    docker-compose -f ./docker/streaming/docker-compose.yml --env-file ./.env up --build
 }
 
 # Function to stop the streaming pipeline
@@ -364,108 +469,88 @@ terraform-destroy(){
     terraform -chdir=terraform destroy
 }
 
-# Check environment and dependencies
+# Function to check environment setup
 check-environment() {
     echo "==========================================================="
-    echo "Checking environment and dependencies..."
+    echo "Checking environment setup..."
     
-    # Check Java
-    if [ -z "$JAVA_HOME" ]; then
-        echo "❌ JAVA_HOME is not set."
-        if type -p java > /dev/null; then
-            echo "Java is installed. Setting JAVA_HOME..."
-            export JAVA_HOME=$(readlink -f $(which java) | sed "s:/bin/java::")
-            echo "✅ JAVA_HOME set to $JAVA_HOME"
+    # Check if .env file exists
+    if [ ! -f ".env" ]; then
+        echo "❌ .env file not found."
+        if [ -f ".env.example" ]; then
+            echo "Creating .env file from .env.example..."
+            cp .env.example .env
+            echo "✅ Created .env file. Please review and adjust settings if necessary."
         else
-            echo "❌ Java not found. Please install Java JDK."
-            echo "   Run: sudo apt update && sudo apt install -y openjdk-11-jdk"
+            echo "❌ .env.example file not found. Cannot create .env file."
             return 1
         fi
     else
-        echo "✅ JAVA_HOME is set to $JAVA_HOME"
+        echo "✅ .env file found."
     fi
     
-    # Check GCP credentials - use a relative path if environment variable is not set
-    GCP_CREDS_PATH=${GOOGLE_APPLICATION_CREDENTIALS:-"./gcp-creds.json"}
-    if [ ! -f "$GCP_CREDS_PATH" ]; then
-        echo "❌ GCP credentials file not found at $GCP_CREDS_PATH"
-        echo "   Please make sure gcp-creds.json exists and is properly configured."
+    # Check for GCP credentials
+    if [ ! -f "gcp-creds.json" ]; then
+        echo "❌ GCP credentials file (gcp-creds.json) not found."
+        echo "You need to create this file with valid GCP credentials."
         return 1
     else
-        echo "✅ GCP credentials file found at $GCP_CREDS_PATH"
-        # Set the environment variable if it's not already set
-        if [ -z "$GOOGLE_APPLICATION_CREDENTIALS" ]; then
-            export GOOGLE_APPLICATION_CREDENTIALS="$GCP_CREDS_PATH"
-            echo "   Set GOOGLE_APPLICATION_CREDENTIALS=$GOOGLE_APPLICATION_CREDENTIALS"
-        fi
+        echo "✅ GCP credentials file found."
     fi
     
-    # Check required Python packages
-    echo "Checking required Python packages..."
-    if ! pip show confluent-kafka > /dev/null 2>&1; then
-        echo "❌ confluent-kafka not installed."
-        echo "   Please run: pip install -r requirements.txt"
-        return 1
-    fi
-    
-    if ! pip show pyspark > /dev/null 2>&1; then
-        echo "❌ pyspark not installed."
-        echo "   Please run: pip install -r requirements.txt"
-        return 1
-    fi
-    
-    if ! pip show google-cloud-storage > /dev/null 2>&1; then
-        echo "❌ google-cloud-storage not installed."
-        echo "   Please run: pip install -r requirements.txt"
-        return 1
-    fi
-    
-    if ! pip show pyarrow > /dev/null 2>&1; then
-        echo "❌ pyarrow not installed."
-        echo "   Please run: pip install -r requirements.txt"
-        return 1
-    fi
-    
-    echo "✅ Required Python packages are installed."
-    
-    # Check Docker
-    if ! docker --version > /dev/null 2>&1; then
-        echo "❌ Docker not found."
-        echo "   Please install Docker and Docker Compose."
+    # Check for Docker
+    if ! command -v docker &> /dev/null; then
+        echo "❌ Docker not found. Please install Docker."
         return 1
     else
         echo "✅ Docker is installed."
     fi
     
-    if ! docker-compose --version > /dev/null 2>&1; then
-        echo "❌ Docker Compose not found."
-        echo "   Please install Docker Compose."
+    # Check for Docker Compose
+    if ! command -v docker-compose &> /dev/null; then
+        echo "❌ Docker Compose not found. Please install Docker Compose."
         return 1
     else
         echo "✅ Docker Compose is installed."
     fi
     
-    # Create network if it doesn't exist
+    # Check for Git
+    if ! command -v git &> /dev/null; then
+        echo "❌ Git not found. Please install Git."
+        return 1
+    else
+        echo "✅ Git is installed."
+    fi
+    
+    # Check if the Docker network exists
     if ! docker network inspect ${PROJECT_NAME}-network &>/dev/null; then
-        echo "Creating Docker network: ${PROJECT_NAME}-network"
+        echo "❌ Docker network '${PROJECT_NAME}-network' not found. Creating it..."
         docker network create ${PROJECT_NAME}-network
-        echo "✅ Network ${PROJECT_NAME}-network created."
+        echo "✅ Created Docker network '${PROJECT_NAME}-network'."
     else
-        echo "✅ Network ${PROJECT_NAME}-network already exists."
+        echo "✅ Docker network '${PROJECT_NAME}-network' exists."
     fi
     
-    # Check temporary directory for data processing
-    if [ ! -d "/tmp/agri_data" ]; then
-        echo "Creating temporary directory: /tmp/agri_data"
-        mkdir -p /tmp/agri_data
-        chmod 777 /tmp/agri_data
-        echo "✅ Temporary directory created."
+    # Check streaming_pipeline directory
+    if [ ! -d "streaming_pipeline" ]; then
+        echo "❌ streaming_pipeline directory not found."
+        return 1
     else
-        echo "✅ Temporary directory /tmp/agri_data exists."
+        echo "✅ streaming_pipeline directory found."
     fi
     
-    echo "==========================================================="
-    echo "✅ Environment check completed successfully."
+    # Check if we're in a git repository
+    if [ ! -d ".git" ]; then
+        echo "❌ Not in a Git repository. Initializing Git repository..."
+        git init
+        git add .
+        git commit -m "Initial commit - Agricultural data pipeline setup"
+        echo "✅ Git repository initialized."
+    else
+        echo "✅ Git repository exists."
+    fi
+    
+    echo "Environment check completed successfully."
     echo "==========================================================="
     return 0
 }
@@ -1295,3 +1380,145 @@ generate-dbt-docs() {
     
     echo "==========================================================="
 }
+
+# Function to rebuild and restart the entire stack
+rebuild-and-restart-all() {
+    echo "==========================================================="
+    echo "Rebuilding and restarting the entire data pipeline stack..."
+    
+    # Check environment first
+    check-environment || { echo "⛔ Environment check failed. Please fix the issues before continuing."; return 1; }
+    
+    # Stop all services
+    echo "Stopping all services..."
+    stop-streaming-pipeline
+    stop-spark
+    stop-kafka
+    stop-postgres
+    stop-metabase
+    
+    # Wait for containers to stop
+    echo "Waiting for all containers to stop..."
+    sleep 10
+    
+    # Update configuration
+    echo "Checking and updating configurations..."
+    check_fix_kafka_config
+    
+    # Create a git checkpoint
+    git_checkpoint "Configuration updated for rebuild"
+    
+    # Start the services in the correct order
+    echo "Starting Postgres..."
+    start-postgres
+    
+    echo "Starting Kafka..."
+    start-kafka
+    
+    echo "Waiting for Kafka to be ready..."
+    sleep 15
+    
+    echo "Verifying and configuring Kafka..."
+    verify-kafka
+    ensure_broker_hostname_resolution
+    
+    echo "Starting Spark..."
+    start-spark
+    
+    echo "Starting Metabase..."
+    start-metabase
+    
+    # Create another git checkpoint
+    git_checkpoint "Infrastructure services restarted successfully"
+    
+    echo "Starting streaming pipeline with producer and consumer..."
+    docker-compose -f ./docker/streaming/docker-compose.yml --env-file ./.env up -d --build
+    
+    echo "All services have been rebuilt and restarted."
+    echo "==========================================================="
+    
+    # Show status of running containers
+    echo "Current status of containers:"
+    docker ps
+    
+    return 0
+}
+
+# Function to display pipeline status
+status() {
+    echo "==========================================================="
+    echo "Agricultural Data Pipeline Status"
+    echo "==========================================================="
+    
+    # Check Docker containers
+    echo "Docker Containers:"
+    docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | grep -E "${PROJECT_NAME}"
+    
+    # Check Kafka topics
+    if docker ps | grep -q "${PROJECT_NAME}-broker"; then
+        echo -e "\nKafka Topics:"
+        docker exec ${PROJECT_NAME}-broker kafka-topics --bootstrap-server localhost:29092 --list | grep -v -e "^$"
+    else
+        echo -e "\nKafka is not running."
+    fi
+    
+    # Check GCS buckets if gsutil is available
+    if command -v gsutil &> /dev/null; then
+        echo -e "\nGCS Buckets:"
+        gsutil ls 2>/dev/null || echo "Cannot access GCS buckets. Check credentials."
+    else
+        echo -e "\ngsutil not installed. Cannot check GCS buckets."
+    fi
+    
+    echo "==========================================================="
+    return 0
+}
+
+# Function to display help information
+help() {
+    echo "==========================================================="
+    echo "Agricultural Data Pipeline - Command Help"
+    echo "==========================================================="
+    echo "Available commands:"
+    echo
+    echo "Infrastructure Management:"
+    echo "  start-kafka             - Start Kafka and Zookeeper"
+    echo "  stop-kafka              - Stop Kafka and Zookeeper"
+    echo "  start-spark             - Start Spark master and worker"
+    echo "  stop-spark              - Stop Spark services"
+    echo "  start-postgres          - Start PostgreSQL and PgAdmin"
+    echo "  stop-postgres           - Stop PostgreSQL and PgAdmin"
+    echo "  start-metabase          - Start Metabase for visualization"
+    echo "  stop-metabase           - Stop Metabase"
+    echo "  start-airflow           - Start Airflow for workflow orchestration"
+    echo "  stop-airflow            - Stop Airflow"
+    echo
+    echo "Pipeline Operations:"
+    echo "  start-streaming-pipeline - Start the streaming data pipeline"
+    echo "  stop-streaming-pipeline  - Stop the streaming data pipeline"
+    echo "  verify-kafka            - Verify Kafka setup and create topic if needed"
+    echo "  rebuild-and-restart-all - Rebuild and restart all services"
+    echo "  status                  - Show status of all pipeline components"
+    echo
+    echo "Maintenance and Troubleshooting:"
+    echo "  check-environment       - Check and validate environment setup"
+    echo "  check_fix_kafka_config  - Check and fix Kafka configuration issues"
+    echo "  ensure_broker_hostname_resolution - Ensure Kafka broker hostname resolution"
+    echo "  restart-kafka-with-config - Restart Kafka with proper configuration"
+    echo "  git_checkpoint \"Message\" - Create a Git checkpoint with custom message"
+    echo
+    echo "Usage example:"
+    echo "  source commands.sh"
+    echo "  check-environment"
+    echo "  rebuild-and-restart-all"
+    echo "==========================================================="
+}
+
+# If the script is being sourced, display the available commands
+if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
+    echo "Agricultural Data Pipeline commands loaded."
+    echo "Type 'help' to see available commands."
+else
+    echo "Please source this script instead of running it directly:"
+    echo "  source commands.sh"
+fi
