@@ -79,4 +79,4 @@ def export_gcs_to_bigquery(**kwargs):
         return {'status': 'success', 'message': 'Export completed successfully'}
     except Exception as e:
         logger.error(f"Error in GCS to BigQuery export: {str(e)}")
-        return {'status': 'error', 'message': str(e)} 
+        return {'status': 'error', 'message': str(e)}

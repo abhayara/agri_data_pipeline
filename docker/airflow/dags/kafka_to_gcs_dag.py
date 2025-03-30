@@ -49,9 +49,9 @@ consume_task = PythonOperator(
 # Logging task to confirm execution
 log_task = BashOperator(
     task_id='log_completion',
-    bash_command='echo "Kafka to GCS streaming completed at $(date)"',
+    bash_command='echo "Kafka to GCS streaming completed at Sun Mar 30 10:08:03 UTC 2025"',
     dag=dag,
 )
 
 # Define task dependencies
-consume_task >> log_task 
+consume_task >> log_task

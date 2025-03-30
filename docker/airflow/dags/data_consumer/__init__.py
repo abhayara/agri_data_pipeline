@@ -205,4 +205,4 @@ def consume_messages(**kwargs):
         consumer.close()
         logger.info("Consumer closed")
     
-    return {'status': 'success', 'message': f'Processed {message_counter} messages in {batch_counter + 1} batches'} 
+    return {'status': 'success', 'message': f'Processed {message_counter} messages in {batch_counter + 1} batches'}
