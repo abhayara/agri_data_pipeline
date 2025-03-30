@@ -153,6 +153,7 @@ usage() {
     echo -e "  --batch-only      Only run the batch pipeline"
     echo -e "  --dbt-only        Only run the DBT transformations"
     echo -e "  --gcs-status      Check data in GCS bucket"
+    echo -e "  --rebuild-streaming Rebuild the streaming pipeline with dynamic broker IP"
 }
 
 # Function to check GCS bucket status
@@ -184,6 +185,109 @@ check_gcs_status() {
     return 0
 }
 
+# Function to rebuild streaming pipeline with dynamic broker IP
+rebuild_streaming_pipeline() {
+    print_section "Rebuilding Streaming Pipeline"
+    
+    # First stop the streaming pipeline
+    echo -e "${YELLOW}Stopping streaming pipeline...${NC}"
+    stop-streaming-pipeline
+    
+    # Update broker hostname resolution
+    echo -e "${YELLOW}Updating broker hostname resolution...${NC}"
+    ensure_broker_hostname_resolution
+    
+    # Start the streaming pipeline with updated configuration
+    echo -e "${YELLOW}Starting streaming pipeline with updated broker configurations...${NC}"
+    docker-compose -f ./docker/streaming/docker-compose.yml --env-file ./.env up -d --build
+    
+    # Check status
+    echo -e "${YELLOW}Checking streaming pipeline status...${NC}"
+    sleep 15
+    check-streaming-status
+    
+    echo -e "${GREEN}Streaming pipeline rebuilt with dynamic broker IP resolution${NC}"
+}
+
+# Function to run dbt seeds first, then the dbt models
+run_dbt_with_seeds() {
+    print_section "Running DBT Seeds and Models"
+    
+    echo -e "${YELLOW}Loading seed data into BigQuery...${NC}"
+    run-dbt-seeds || {
+        echo -e "${RED}Failed to load seed data. DBT models may fail.${NC}"
+        # Continue despite error, as we'll try to run models anyway
+    }
+    
+    echo -e "${YELLOW}Running DBT models on BigQuery data...${NC}"
+    run-dbt
+    
+    return $?
+}
+
+# Function to wait for raw data in GCS before starting batch processing
+wait_for_gcs_data() {
+    print_section "Waiting for Raw Data in GCS"
+    
+    MAX_ATTEMPTS=30  # 5 minutes total wait time
+    ATTEMPT=1
+    
+    echo "Checking for raw data in GCS bucket '${GCS_BUCKET_NAME}'..."
+    
+    while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+        echo "Check attempt $ATTEMPT of $MAX_ATTEMPTS (waiting for data in GCS)..."
+        
+        if gsutil ls "gs://${GCS_BUCKET_NAME}/raw/" &>/dev/null && 
+           gsutil ls "gs://${GCS_BUCKET_NAME}/raw/agri_data/" &>/dev/null && 
+           [ "$(gsutil ls -r "gs://${GCS_BUCKET_NAME}/raw/agri_data/" | wc -l)" -gt 0 ]; then
+            echo -e "${GREEN}✅ Raw data found in GCS bucket! Proceeding with batch processing.${NC}"
+            return 0
+        fi
+        
+        echo "No raw data found yet. Waiting 10 seconds before checking again..."
+        sleep 10
+        ATTEMPT=$((ATTEMPT + 1))
+    done
+    
+    echo -e "${YELLOW}⚠️ Timeout reached while waiting for raw data. You may need to check the streaming pipeline.${NC}"
+    echo -e "${YELLOW}Proceeding with batch processing anyway, but it may not find any data to process.${NC}"
+    return 1
+}
+
+# Function to wait for Spark jobs to complete before starting DBT
+wait_for_spark_job() {
+    print_section "Waiting for Spark Batch Processing"
+    
+    MAX_ATTEMPTS=20  # ~5 minutes total wait time
+    ATTEMPT=1
+    
+    echo "Checking for Spark batch processing completion..."
+    
+    while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+        echo "Check attempt $ATTEMPT of $MAX_ATTEMPTS (waiting for Spark job)..."
+        
+        # Check if any data has been processed to OLAP folder
+        if gsutil ls "gs://${GCS_BUCKET_NAME}/olap/" &>/dev/null && 
+           [ "$(gsutil ls -r "gs://${GCS_BUCKET_NAME}/olap/" | wc -l)" -gt 0 ]; then
+            echo -e "${GREEN}✅ Spark job completed! OLAP data found in GCS bucket. Proceeding with DBT.${NC}"
+            return 0
+        fi
+        
+        # Also check if the Spark job has completed by looking at the container logs
+        if docker logs agri_data_pipeline-spark-master 2>&1 | grep -q "Batch Processing completed successfully"; then
+            echo -e "${GREEN}✅ Spark job completed successfully! Proceeding with DBT.${NC}"
+            return 0
+        fi
+        
+        echo "Spark processing still ongoing. Waiting 15 seconds before checking again..."
+        sleep 15
+        ATTEMPT=$((ATTEMPT + 1))
+    done
+    
+    echo -e "${YELLOW}⚠️ Timeout reached while waiting for Spark job. Proceeding with DBT anyway.${NC}"
+    return 1
+}
+
 # Main execution
 main() {
     if [ "$1" == "--help" ]; then
@@ -198,6 +302,11 @@ main() {
     
     if [ "$1" == "--gcs-status" ]; then
         check_gcs_status
+        exit $?
+    fi
+    
+    if [ "$1" == "--rebuild-streaming" ]; then
+        rebuild_streaming_pipeline
         exit $?
     fi
     
@@ -219,6 +328,10 @@ main() {
             echo -e "${RED}Failed to start Kafka. Check logs.${NC}"
             exit 1
         }
+        
+        # Ensure broker hostname resolution
+        ensure_broker_hostname_resolution
+        
         # Start streaming pipeline
         start-streaming-pipeline || {
             echo -e "${RED}Failed to start streaming pipeline. Check logs.${NC}"
@@ -230,22 +343,32 @@ main() {
     fi
     
     if [ "$1" == "--batch-only" ]; then
-        # Start Spark first
-        start-spark || { 
-            echo -e "${RED}Failed to start Spark. Check logs.${NC}"
-            exit 1
-        }
-        # Run batch pipeline
-        start-batch-pipeline || {
-            echo -e "${RED}Failed to run batch pipeline. Check logs.${NC}"
+        # Wait for raw data in GCS
+        wait_for_gcs_data
+        
+        # Start batch processing
+        start-batch-processing || {
+            echo -e "${RED}Failed to start batch processing. Check logs.${NC}"
             exit 1
         }
         exit $?
     fi
     
     if [ "$1" == "--dbt-only" ]; then
-        run-dbt || {
-            echo -e "${RED}Failed to run DBT transformations. Check logs.${NC}"
+        # Wait for Spark job to complete
+        wait_for_spark_job
+        
+        # Start DBT transformations
+        start-dbt-transformations || {
+            echo -e "${RED}Failed to start DBT transformations. Check logs.${NC}"
+            exit 1
+        }
+        exit $?
+    fi
+    
+    if [ "$1" == "--dbt-seeds" ]; then
+        run-dbt-seeds || {
+            echo -e "${RED}Failed to load DBT seed data. Check logs.${NC}"
             exit 1
         }
         exit $?
@@ -269,15 +392,15 @@ main() {
         exit 1
     }
     
-    # 4. Start Kafka and fix configuration
-    echo -e "${YELLOW}Checking and fixing Kafka configuration...${NC}"
-    check_fix_kafka_config
-    
-    # 5. Start Kafka
+    # 4. Start Kafka
     start-kafka || {
         echo -e "${RED}Failed to start Kafka. Check logs.${NC}"
         exit 1
     }
+    
+    # 5.5 Ensure broker hostname resolution
+    echo -e "${YELLOW}Ensuring dynamic broker hostname resolution...${NC}"
+    ensure_broker_hostname_resolution
     
     # 6. Start Spark and fix configuration
     echo -e "${YELLOW}Checking and fixing GCS configuration...${NC}"
@@ -295,17 +418,24 @@ main() {
         exit 1
     }
     
-    # 9. Run batch pipeline
-    echo -e "${YELLOW}Waiting for data to be streamed to GCS...${NC}"
-    sleep 60  # Wait for some data to be produced and consumed
+    # 9. Wait for raw data to be uploaded to GCS
+    echo -e "${YELLOW}Waiting for raw data to be uploaded to GCS...${NC}"
+    wait_for_gcs_data
     
-    start-batch-pipeline || {
-        echo -e "${YELLOW}Warning: Batch pipeline encountered errors. Check logs.${NC}"
+    # 10. Start batch processing
+    start-batch-processing || {
+        echo -e "${RED}Failed to start batch processing. Check logs.${NC}"
+        exit 1
     }
     
-    # 10. Run DBT transformations
-    run-dbt || {
-        echo -e "${YELLOW}Warning: DBT transformations encountered errors. Check logs.${NC}"
+    # 11. Wait for Spark job to complete
+    echo -e "${YELLOW}Waiting for Spark job to complete...${NC}"
+    wait_for_spark_job
+    
+    # 12. Start DBT transformations
+    start-dbt-transformations || {
+        echo -e "${RED}Failed to start DBT transformations. Check logs.${NC}"
+        exit 1
     }
     
     print_section "Pipeline Rebuild Complete"
