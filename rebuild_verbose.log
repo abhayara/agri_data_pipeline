@@ -121,3 +121,137 @@ Waiting for Airflow to be ready...
 [0;32m✓ Updated GCS to BigQuery DAG[0m
 [0;32m✓ Created Kafka consumer module for Airflow[0m
 [0;32m✓ Updated Kafka to GCS DAG[0m
+[dbt-cloud f949819] Checkpoint: Airflow DAGs fixed - 2025-03-30 10:05:37
+ 5 files changed, 49 insertions(+), 6 deletions(-)
+
+[0;32m============================================================[0m
+[0;32m== 6. Starting Spark[0m
+[0;32m============================================================[0m
+DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
+            Install the buildx component to build images with BuildKit:
+            https://docs.docker.com/go/buildx/
+
+Sending build context to Docker daemon  34.18MB
+Step 1/7 : ARG java_image_tag=17-jre
+Step 2/7 : FROM eclipse-temurin:${java_image_tag}
+ ---> af0895d1861a
+Step 3/7 : ARG shared_workspace=/opt/workspace
+ ---> Using cache
+ ---> b6d5a389f4a5
+Step 4/7 : RUN mkdir -p ${shared_workspace} &&     apt-get update -y &&     apt-get install -y python3 &&     ln -s /usr/bin/python3 /usr/bin/python &&     rm -rf /var/lib/apt/lists/*
+ ---> Using cache
+ ---> d01febcf63eb
+Step 5/7 : ENV SHARED_WORKSPACE=${shared_workspace}
+ ---> Using cache
+ ---> 9b2a3534c6e0
+Step 6/7 : VOLUME ${shared_workspace}
+ ---> Using cache
+ ---> 8bbe19b11ad4
+Step 7/7 : CMD ["bash"]
+ ---> Using cache
+ ---> e50fd595c5f6
+Successfully built e50fd595c5f6
+Successfully tagged cluster-base:latest
+DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
+            Install the buildx component to build images with BuildKit:
+            https://docs.docker.com/go/buildx/
+
+Sending build context to Docker daemon  34.18MB
+Step 1/9 : FROM cluster-base
+ ---> e50fd595c5f6
+Step 2/9 : ARG spark_version=3.3.1
+ ---> Using cache
+ ---> b7d71174f61f
+Step 3/9 : ARG hadoop_version=3
+ ---> Using cache
+ ---> 5f08a1297e0b
+Step 4/9 : RUN apt-get update -y &&     apt-get install -y curl &&     curl https://archive.apache.org/dist/spark/spark-${spark_version}/spark-${spark_version}-bin-hadoop${hadoop_version}.tgz -o spark.tgz &&     tar -xf spark.tgz &&     mv spark-${spark_version}-bin-hadoop${hadoop_version} /usr/bin/ &&     mkdir /usr/bin/spark-${spark_version}-bin-hadoop${hadoop_version}/logs &&     rm spark.tgz
+ ---> Using cache
+ ---> f4bcdd43df9d
+Step 5/9 : ENV SPARK_HOME /usr/bin/spark-${spark_version}-bin-hadoop${hadoop_version}
+ ---> Using cache
+ ---> 8897561882a2
+Step 6/9 : ENV SPARK_MASTER_HOST spark-master
+ ---> Using cache
+ ---> cd50a71a541a
+Step 7/9 : ENV SPARK_MASTER_PORT 7077
+ ---> Using cache
+ ---> 017b7c52914d
+Step 8/9 : ENV PYSPARK_PYTHON python3
+ ---> Using cache
+ ---> e71d8f4ce068
+Step 9/9 : WORKDIR ${SPARK_HOME}
+ ---> Using cache
+ ---> b39f963eab33
+Successfully built b39f963eab33
+Successfully tagged spark-base:latest
+DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
+            Install the buildx component to build images with BuildKit:
+            https://docs.docker.com/go/buildx/
+
+Sending build context to Docker daemon  34.18MB
+Step 1/4 : FROM spark-base
+ ---> b39f963eab33
+Step 2/4 : ARG spark_master_web_ui=8080
+ ---> Using cache
+ ---> 33a70512ccc3
+Step 3/4 : EXPOSE ${spark_master_web_ui} ${SPARK_MASTER_PORT}
+ ---> Using cache
+ ---> 04229bedeb62
+Step 4/4 : CMD bin/spark-class org.apache.spark.deploy.master.Master >> logs/spark-master.out
+ ---> Using cache
+ ---> 91bfa1fbbbc8
+Successfully built 91bfa1fbbbc8
+Successfully tagged spark-master:latest
+DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
+            Install the buildx component to build images with BuildKit:
+            https://docs.docker.com/go/buildx/
+
+Sending build context to Docker daemon  34.18MB
+Step 1/4 : FROM spark-base
+ ---> b39f963eab33
+Step 2/4 : ARG spark_worker_web_ui=8081
+ ---> Using cache
+ ---> a95cce403626
+Step 3/4 : EXPOSE ${spark_worker_web_ui}
+ ---> Using cache
+ ---> b3a636137677
+Step 4/4 : CMD bin/spark-class org.apache.spark.deploy.worker.Worker spark://${SPARK_MASTER_HOST}:${SPARK_MASTER_PORT} >> logs/spark-worker.out
+ ---> Using cache
+ ---> 1e20b68cd199
+Successfully built 1e20b68cd199
+Successfully tagged spark-worker:latest
+DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
+            Install the buildx component to build images with BuildKit:
+            https://docs.docker.com/go/buildx/
+
+Sending build context to Docker daemon  34.18MB
+Step 1/7 : FROM cluster-base
+ ---> e50fd595c5f6
+Step 2/7 : ARG spark_version=3.3.1
+ ---> Using cache
+ ---> b7d71174f61f
+Step 3/7 : ARG jupyterlab_version=3.6.1
+ ---> Using cache
+ ---> af7a5d19ff73
+Step 4/7 : RUN apt-get update -y &&     apt-get install -y python3-pip &&     pip3 install wget pyspark==${spark_version} jupyterlab==${jupyterlab_version}
+ ---> Running in 5d8d0cd1c618
+Get:1 http://security.ubuntu.com/ubuntu noble-security InRelease [126 kB]
+Get:2 http://archive.ubuntu.com/ubuntu noble InRelease [256 kB]
+Get:3 http://security.ubuntu.com/ubuntu noble-security/restricted amd64 Packages [1,024 kB]
+
+[0;32m============================================================[0m
+[0;32m== Starting rebuild of Agri Data Pipeline[0m
+[0;32m============================================================[0m
+
+[0;32m============================================================[0m
+[0;32m== 1. Cleaning up existing containers[0m
+[0;32m============================================================[0m
+Stopping Kafka containers...
+Stopping Airflow containers...
+Stopping Spark containers...
+Stopping streaming containers...
+Stopping Postgres containers...
+Stopping Metabase containers...
+Removing any dangling containers...
+Total reclaimed space: 0B
