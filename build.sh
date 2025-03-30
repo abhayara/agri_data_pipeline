@@ -50,6 +50,7 @@ destroy_infrastructure() {
     stop-streaming-pipeline
     stop-spark
     stop-kafka
+    stop-airflow
     
     # Stop any other services
     echo -e "${YELLOW}Removing any remaining project containers...${NC}"
@@ -412,27 +413,34 @@ main() {
         exit 1
     }
     
-    # 8. Start streaming pipeline
+    # 8. Start Airflow
+    start-airflow || {
+        echo -e "${RED}Failed to start Airflow. Check logs.${NC}"
+        # Continue despite error, as we want other components to work
+        echo -e "${YELLOW}Continuing with other components...${NC}"
+    }
+    
+    # 9. Start streaming pipeline
     start-streaming-pipeline || {
         echo -e "${RED}Failed to start streaming pipeline. Check logs.${NC}"
         exit 1
     }
     
-    # 9. Wait for raw data to be uploaded to GCS
+    # 10. Wait for raw data to be uploaded to GCS
     echo -e "${YELLOW}Waiting for raw data to be uploaded to GCS...${NC}"
     wait_for_gcs_data
     
-    # 10. Start batch processing
+    # 11. Start batch processing
     start-batch-processing || {
         echo -e "${RED}Failed to start batch processing. Check logs.${NC}"
         exit 1
     }
     
-    # 11. Wait for Spark job to complete
+    # 12. Wait for Spark job to complete
     echo -e "${YELLOW}Waiting for Spark job to complete...${NC}"
     wait_for_spark_job
     
-    # 12. Start DBT transformations
+    # 13. Start DBT transformations
     start-dbt-transformations || {
         echo -e "${RED}Failed to start DBT transformations. Check logs.${NC}"
         exit 1

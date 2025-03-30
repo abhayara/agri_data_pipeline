@@ -420,17 +420,22 @@ start-dbt-transformations() {
     # Check environment first
     check-environment || { echo "⛔ Environment check failed. Please fix the issues before continuing."; return 1; }
     
-    # Run DBT transformations
-    echo "Running DBT transformations..."
+    # Run DBT transformations directly (no container)
+    echo "Running DBT transformations using DBT Cloud..."
+    
+    # Change to the business_transformations directory
+    cd business_transformations || { 
+        echo "❌ Could not find business_transformations directory."; 
+        return 1; 
+    }
     
     # First load seeds
     echo "Loading DBT seeds..."
-    DBT_SEED_RESULT=$(docker exec -i agri_data_pipeline-dbt /bin/bash -c "cd /usr/app && dbt seed --profiles-dir=. --project-dir=." 2>&1)
-    DBT_SEED_EXIT_CODE=$?
+    dbt seed --profiles-dir=.
     
-    if [ $DBT_SEED_EXIT_CODE -ne 0 ]; then
-        echo "❌ DBT seed loading failed with exit code: $DBT_SEED_EXIT_CODE"
-        echo "Error details: $DBT_SEED_RESULT"
+    if [ $? -ne 0 ]; then
+        echo "❌ DBT seed loading failed"
+        cd ..
         return 1
     fi
     
@@ -438,26 +443,25 @@ start-dbt-transformations() {
     
     # Then run the models
     echo "Running DBT models..."
-    DBT_RUN_RESULT=$(docker exec -i agri_data_pipeline-dbt /bin/bash -c "cd /usr/app && dbt run --profiles-dir=. --project-dir=." 2>&1)
-    DBT_RUN_EXIT_CODE=$?
+    dbt run --profiles-dir=.
     
-    if [ $DBT_RUN_EXIT_CODE -ne 0 ]; then
-        echo "❌ DBT run failed with exit code: $DBT_RUN_EXIT_CODE"
-        echo "Error details: $DBT_RUN_RESULT"
+    if [ $? -ne 0 ]; then
+        echo "❌ DBT run failed"
+        cd ..
         return 1
     fi
     
     echo "✅ DBT models run successfully."
     
-    # Generate and serve the documentation
+    # Generate the documentation
     echo "Generating DBT documentation..."
-    docker exec -i agri_data_pipeline-dbt /bin/bash -c "cd /usr/app && dbt docs generate --profiles-dir=. --project-dir=." &>/dev/null
+    dbt docs generate --profiles-dir=.
     
-    # Log the successful completion for monitoring
-    docker exec -i agri_data_pipeline-dbt /bin/bash -c "echo '$(date) - DBT Transformations completed successfully' > /usr/app/dbt_completion.log"
+    # Return to the original directory
+    cd ..
     
     echo "✅ DBT transformations completed successfully."
-    echo "DBT documentation available at: http://localhost:8080"
+    echo "You can view your models in the BigQuery console."
     
     echo "==========================================================="
     return 0

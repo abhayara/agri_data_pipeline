@@ -36,6 +36,7 @@ MODULES=(
     "./scripts/spark/functions.sh"
     "./scripts/batch/functions.sh"
     "./scripts/dbt/functions.sh"
+    "./scripts/airflow/functions.sh"
     # Add more modules as they are created
 )
 
