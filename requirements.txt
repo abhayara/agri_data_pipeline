@@ -1,20 +1,22 @@
-# Kafka related
+# Core requirements with fixed versions
+pyspark==3.1.3
 confluent-kafka
+python-dotenv==0.21.1
+pandas==1.5.3
+pyarrow
 
-# Cloud Storage
+# GCP dependencies
 google-cloud-storage
 google-cloud-bigquery
 
-# Data processing
-pyarrow
-pyspark
+# Data generation
+faker==15.3.4
 
 # Airflow
 apache-airflow
 apache-airflow-providers-google
 apache-airflow-providers-postgres
 
-# Utilities
-pandas
+# Extras
+tenacity==8.2.2
 numpy
-python-dotenv 
