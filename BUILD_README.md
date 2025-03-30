@@ -11,6 +11,20 @@ The Agricultural Data Pipeline processes agricultural data through several stage
 3. **Batch Processing**: Processes raw data using Spark and exports it to BigQuery
 4. **Business Transformations**: Applies business logic transformations using dbt on the data in BigQuery
 
+## Build Script Architecture
+
+The build system has been designed with a modular architecture:
+
+1. **Main Build Script** (`build.sh`): Orchestrates the overall build process
+2. **Module Scripts** (in `scripts/` directory):
+   - `scripts/streaming/functions.sh`: Kafka and streaming pipeline functions
+   - `scripts/spark/functions.sh`: Spark and batch processing functions
+   - `scripts/batch/functions.sh`: Batch pipeline and GCS connector functions
+   - `scripts/dbt/functions.sh`: DBT transformation functions
+3. **Module Loader** (`scripts/main.sh`): Loads all module scripts and provides common utilities
+
+All scripts include robust error handling and validation to ensure proper execution and easy troubleshooting.
+
 ## Build Script Usage
 
 ### Basic Usage
@@ -49,12 +63,18 @@ Available options:
 | `--streaming-only` | Only start the streaming pipeline |
 | `--batch-only` | Only run the batch pipeline |
 | `--dbt-only` | Only run the dbt transformations |
+| `--gcs-status` | Check data in GCS bucket |
 
 ### Examples
 
 Check current status of the pipeline:
 ```bash
 ./build.sh --status
+```
+
+Check GCS bucket for data:
+```bash
+./build.sh --gcs-status
 ```
 
 Clean all resources without rebuilding:
@@ -87,6 +107,14 @@ The build script requires:
 - GCP credentials (gcp-creds.json in the project root)
 - Environment variables (.env file in the project root)
 
+## Extending the Build System
+
+To add new functionality to the build system:
+
+1. Add new functions to the appropriate module in `scripts/` directory
+2. Update `scripts/main.sh` if adding new module files
+3. Extend the `build.sh` script to use the new functions
+
 ## Troubleshooting
 
 If any component fails:
@@ -105,4 +133,9 @@ If any component fails:
 3. Verify infrastructure status:
    ```bash
    ./build.sh --status
+   ```
+
+4. Check for data in GCS:
+   ```bash
+   ./build.sh --gcs-status
    ``` 
