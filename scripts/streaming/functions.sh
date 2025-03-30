@@ -149,11 +149,26 @@ ensure_broker_hostname_resolution() {
     
     echo "Broker IP: $BROKER_IP"
     
+    # Update the extra_hosts in docker-compose file for streaming services
+    STREAMING_COMPOSE_FILE="./docker/streaming/docker-compose.yml"
+    if [ -f "$STREAMING_COMPOSE_FILE" ]; then
+        echo "Updating broker IP in streaming docker-compose file..."
+        # Use sed to replace any broker IP with the current one
+        sed -i -E "s/- \"broker:[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\"/- \"broker:$BROKER_IP\"/" "$STREAMING_COMPOSE_FILE"
+        echo "✅ Updated broker IP in $STREAMING_COMPOSE_FILE to $BROKER_IP"
+    else
+        echo "❌ Streaming docker-compose file not found at $STREAMING_COMPOSE_FILE"
+    fi
+    
     # Create a script in the streaming_pipeline to ensure proper hostname resolution
     RESOLVE_SCRIPT="./streaming_pipeline/resolve_broker.py"
     cat > "$RESOLVE_SCRIPT" << EOF
 import socket
 import time
+import os
+
+# Get broker IP from environment or use default
+broker_ip = os.environ.get('BROKER_IP', '$BROKER_IP')
 
 # Attempt to resolve broker hostname
 def resolve_broker():
@@ -169,18 +184,28 @@ def resolve_broker():
 if __name__ == "__main__":
     print("Attempting to resolve broker hostname...")
     if not resolve_broker():
-        print("Adding broker to /etc/hosts as a fallback...")
-        with open('/etc/hosts', 'a') as hosts_file:
-            hosts_file.write('$BROKER_IP broker\n')
-        time.sleep(1)
-        resolve_broker()
+        print(f"Adding broker {broker_ip} to /etc/hosts as a fallback...")
+        try:
+            with open('/etc/hosts', 'a') as hosts_file:
+                hosts_file.write(f'{broker_ip} broker\\n')
+            time.sleep(1)
+            resolve_broker()
+        except Exception as e:
+            print(f"Error updating hosts file: {e}")
 EOF
     
     echo "✅ Created broker resolution script at $RESOLVE_SCRIPT"
     
-    # Record this change in git
-    git add "$RESOLVE_SCRIPT"
-    git commit -m "Add script to ensure broker hostname resolution"
+    # Update the streaming containers if they're already running
+    if docker ps | grep -q "agri_data_producer"; then
+        echo "Updating existing producer container with new broker IP..."
+        docker exec agri_data_producer bash -c "echo '$BROKER_IP broker' >> /etc/hosts"
+    fi
+    
+    if docker ps | grep -q "agri_data_consumer"; then
+        echo "Updating existing consumer container with new broker IP..."
+        docker exec agri_data_consumer bash -c "echo '$BROKER_IP broker' >> /etc/hosts"
+    fi
     
     echo "Broker hostname resolution setup completed."
     echo "==========================================================="

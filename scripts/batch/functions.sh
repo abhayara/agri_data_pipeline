@@ -413,4 +413,96 @@ gcs-to-bigquery-pipeline(){
     fi
     
     echo "==========================================================="
+}
+
+# Function to check if raw data exists in GCS
+check_raw_data_exists() {
+    echo "==========================================================="
+    echo "Checking for raw data in GCS bucket..."
+    
+    if ! command -v gsutil &> /dev/null; then
+        echo "❌ gsutil not available. Cannot check GCS bucket."
+        return 1
+    fi
+    
+    # Try to list files in the raw data folder
+    RAW_DATA_COUNT=$(gsutil ls -r gs://${GCS_BUCKET_NAME}/raw/ 2>/dev/null | wc -l)
+    
+    if [ "$RAW_DATA_COUNT" -gt 0 ]; then
+        echo "✅ Found $RAW_DATA_COUNT raw data files in bucket ${GCS_BUCKET_NAME}"
+        return 0
+    else
+        echo "❌ No raw data found in GCS bucket ${GCS_BUCKET_NAME}"
+        return 1
+    fi
+}
+
+# Function to wait for raw data to be available in GCS
+wait_for_raw_data() {
+    echo "==========================================================="
+    echo "Waiting for raw data to be available in GCS bucket..."
+    
+    MAX_WAIT_TIME=600  # Maximum wait time in seconds (10 minutes)
+    INTERVAL=30        # Check interval in seconds
+    ELAPSED_TIME=0
+    
+    while [ $ELAPSED_TIME -lt $MAX_WAIT_TIME ]; do
+        if check_raw_data_exists; then
+            echo "✅ Raw data is available in GCS bucket. Proceeding with batch processing."
+            return 0
+        else
+            echo "⏳ No raw data yet. Waiting for $INTERVAL seconds... (elapsed: $ELAPSED_TIME seconds)"
+            sleep $INTERVAL
+            ELAPSED_TIME=$((ELAPSED_TIME + INTERVAL))
+        fi
+    done
+    
+    echo "❌ Timeout waiting for raw data in GCS bucket."
+    return 1
+}
+
+# Function to check if batch processing completed successfully by looking for OLAP data
+check_batch_successful() {
+    echo "==========================================================="
+    echo "Checking if batch processing completed successfully..."
+    
+    if ! command -v gsutil &> /dev/null; then
+        echo "❌ gsutil not available. Cannot check GCS bucket."
+        return 1
+    fi
+    
+    # Try to list files in the OLAP data folder
+    OLAP_DATA_COUNT=$(gsutil ls -r gs://${GCS_BUCKET_NAME}/olap/ 2>/dev/null | wc -l)
+    
+    if [ "$OLAP_DATA_COUNT" -gt 0 ]; then
+        echo "✅ Found $OLAP_DATA_COUNT OLAP files in bucket ${GCS_BUCKET_NAME}"
+        return 0
+    else
+        echo "❌ No OLAP data found in GCS bucket ${GCS_BUCKET_NAME}"
+        return 1
+    fi
+}
+
+# Function to wait for batch processing to complete
+wait_for_batch_completion() {
+    echo "==========================================================="
+    echo "Waiting for batch processing to complete..."
+    
+    MAX_WAIT_TIME=900  # Maximum wait time in seconds (15 minutes)
+    INTERVAL=30        # Check interval in seconds
+    ELAPSED_TIME=0
+    
+    while [ $ELAPSED_TIME -lt $MAX_WAIT_TIME ]; do
+        if check_batch_successful; then
+            echo "✅ Batch processing has completed successfully. OLAP data is available."
+            return 0
+        else
+            echo "⏳ Batch processing still running or incomplete. Waiting for $INTERVAL seconds... (elapsed: $ELAPSED_TIME seconds)"
+            sleep $INTERVAL
+            ELAPSED_TIME=$((ELAPSED_TIME + INTERVAL))
+        fi
+    done
+    
+    echo "❌ Timeout waiting for batch processing to complete."
+    return 1
 } 
