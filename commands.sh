@@ -160,6 +160,59 @@ check_fix_kafka_config() {
     return 0
 }
 
+# Function to check and fix GCS connector configuration
+check_fix_gcs_config() {
+    echo "==========================================================="
+    echo "Checking and fixing GCS connector configuration..."
+    
+    GCS_PIPELINE_FILE="./batch_pipeline/export_to_gcs/pipeline.py"
+    
+    if [ -f "$GCS_PIPELINE_FILE" ]; then
+        # Check if GCS connector is properly configured
+        if ! grep -q "com.google.cloud.bigdataoss:gcs-connector:hadoop3-2.2.11" "$GCS_PIPELINE_FILE"; then
+            echo "Updating PySpark GCS connector configuration..."
+            sed -i 's/spark.jars.packages", "org.apache.hadoop:hadoop-aws:3.3.1/spark.jars.packages", "org.apache.hadoop:hadoop-aws:3.3.1,com.google.cloud.bigdataoss:gcs-connector:hadoop3-2.2.11,com.google.guava:guava:31.1-jre/g' "$GCS_PIPELINE_FILE"
+            sed -i '/GOOGLE_APPLICATION_CREDENTIALS)/ a\        .config("spark.hadoop.fs.gs.impl", "com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystem") \\n        .config("spark.hadoop.fs.AbstractFileSystem.gs.impl", "com.google.cloud.hadoop.fs.gcs.GoogleHadoopFS")' "$GCS_PIPELINE_FILE"
+            echo "✅ Updated GCS connector configuration in pipeline.py file."
+            
+            # Record this change in git
+            git add "$GCS_PIPELINE_FILE"
+            git commit -m "Update GCS connector configuration for Spark"
+        else
+            echo "✅ GCS connector configuration is already present in pipeline.py file."
+        fi
+        
+        # Ensure GCP credentials file exists in both locations
+        if [ -f "./gcp-creds.json" ] && [ ! -f "./batch_pipeline/export_to_gcs/gcp-creds.json" ]; then
+            echo "Copying GCP credentials file to batch_pipeline directory..."
+            cp ./gcp-creds.json ./batch_pipeline/export_to_gcs/
+            echo "✅ Copied GCP credentials file to batch_pipeline directory."
+        fi
+        
+        # Check for type mismatches in sample data generation
+        if ! grep -q "irrigation_amount = 0.0 if" "$GCS_PIPELINE_FILE"; then
+            echo "Fixing type mismatch issues in sample data generation..."
+            sed -i 's/irrigation_amount = 0 if/irrigation_amount = 0.0 if/g' "$GCS_PIPELINE_FILE"
+            sed -i 's/fertilizer_amount = 0 if/fertilizer_amount = 0.0 if/g' "$GCS_PIPELINE_FILE"
+            sed -i 's/pesticide_amount = 0 if/pesticide_amount = 0.0 if/g' "$GCS_PIPELINE_FILE"
+            echo "✅ Fixed type mismatch issues in sample data generation."
+            
+            # Record this change in git
+            git add "$GCS_PIPELINE_FILE"
+            git commit -m "Fix type mismatch issues in sample data generation"
+        else
+            echo "✅ Type handling is already correctly configured."
+        fi
+    else
+        echo "❌ Batch pipeline file not found at $GCS_PIPELINE_FILE."
+        return 1
+    fi
+    
+    echo "GCS connector configuration is now properly set up."
+    echo "==========================================================="
+    return 0
+}
+
 # Modified verify-kafka function to include configuration check and fix
 verify-kafka() {
     echo "==========================================================="
@@ -415,40 +468,88 @@ gcs-to-bigquery-pipeline(){
     echo "==========================================================="
 }
 
-start-batch-pipeline(){
+start-batch-pipeline() {
     echo "==========================================================="
-    echo "Starting the complete batch data processing pipeline..."
+    echo "STEP 1: Processing data with batch pipeline..."
+    echo "==========================================================="
     
-    # Check environment first
+    # Check if network exists
+    if ! docker network inspect ${PROJECT_NAME}-network &>/dev/null; then
+        docker network create ${PROJECT_NAME}-network
+        echo "Created network ${PROJECT_NAME}-network."
+    else
+        echo "Network ${PROJECT_NAME}-network already exists."
+    fi
+    
+    # Load commands
+    echo "✅ Loaded commands for ${PROJECT_NAME}."
+    
+    # Check environment
     check-environment || { echo "⛔ Environment check failed. Please fix the issues before continuing."; return 1; }
     
-    # 1. Run the OLAP transformation pipeline
-    echo "STEP 1: Running OLAP transformations to prepare data..."
-    olap-transformation-pipeline
+    # Fix GCS connector configuration
+    check_fix_gcs_config
     
-    # Capture the exit status
-    TRANSFORM_STATUS=$?
-    if [ $TRANSFORM_STATUS -ne 0 ]; then
-        echo "❌ OLAP transformation pipeline failed with exit code $TRANSFORM_STATUS"
-        echo "  Stopping batch pipeline execution."
-        return 1
+    # Run OLAP transformations to prepare data
+    echo "Running OLAP transformations..."
+    
+    # Check environment again
+    check-environment || { echo "⛔ Environment check failed. Please fix the issues before continuing."; return 1; }
+    
+    # Check if there is data in the /tmp/agri_data directory
+    if [ ! -d "/tmp/agri_data" ] || [ -z "$(ls -A /tmp/agri_data 2>/dev/null)" ]; then
+        echo "⚠️ Warning: No data found in /tmp/agri_data."
+        echo "The streaming pipeline may not have processed any data yet."
+        echo "Proceeding with sample data generation..."
     fi
     
-    # 2. Load data to BigQuery
+    # Run PySpark transformation
+    echo "Starting PySpark transformation..."
+    cd ./batch_pipeline/export_to_gcs || { echo "❌ Could not find batch_pipeline directory."; return 1; }
+    python3 pipeline.py > /tmp/batch_pipeline.log 2>&1
+    
+    if [ $? -eq 0 ]; then
+        echo "✅ Batch pipeline completed successfully."
+    else
+        echo "❌ Batch pipeline encountered errors."
+        echo "Error details:"
+        grep -A 10 "Error" /tmp/batch_pipeline.log | head -20
+        echo "See /tmp/batch_pipeline.log for full details."
+    fi
+    
+    cd ../..
+    
+    echo "==========================================================="
     echo "STEP 2: Loading transformed data to BigQuery..."
-    gcs-to-bigquery-pipeline
+    echo "==========================================================="
     
-    # Capture the exit status
-    BQ_STATUS=$?
-    if [ $BQ_STATUS -ne 0 ]; then
-        echo "❌ GCS to BigQuery export pipeline failed with exit code $BQ_STATUS"
-        echo "  Please check the logs for more details."
+    # Start GCS to BigQuery export pipeline
+    echo "Starting GCS to BigQuery export pipeline..."
+    cd ./batch_pipeline/export_to_big_query || { echo "❌ Could not find export_to_big_query directory."; return 1; }
+    
+    # Check if Airflow is running
+    if ! docker ps | grep -q "airflow-airflow-webserver-1"; then
+        echo "❌ Airflow is not running. Cannot trigger the DAG."
+        echo "  Please start Airflow with 'start-airflow' and try again."
+        cd ../..
         return 1
     fi
     
-    echo "✅ Batch pipeline steps have been initiated successfully."
-    echo "NOTE: The BigQuery loading may still be running in Airflow."
-    echo "  Monitor progress at: http://localhost:${AIRFLOW_PORT}"
+    # Trigger DAG in Airflow
+    docker exec airflow-airflow-webserver-1 airflow dags trigger gcs_to_bigquery_dag
+    
+    if [ $? -eq 0 ]; then
+        echo "✅ GCS to BigQuery export pipeline triggered successfully."
+        echo "  Check Airflow UI at http://localhost:8080 for progress."
+    else
+        echo "❌ GCS to BigQuery export pipeline failed with exit code $?."
+        echo "  Please check the logs for more details."
+    fi
+    
+    cd ../..
+    
+    echo "==========================================================="
+    echo "Batch pipeline process completed."
     echo "==========================================================="
 }
 
@@ -496,6 +597,13 @@ check-environment() {
         return 1
     else
         echo "✅ GCP credentials file found."
+        
+        # Copy GCP credentials to batch_pipeline/export_to_gcs if needed
+        if [ -d "batch_pipeline/export_to_gcs" ] && [ ! -f "batch_pipeline/export_to_gcs/gcp-creds.json" ]; then
+            echo "Copying GCP credentials to batch_pipeline/export_to_gcs directory..."
+            cp gcp-creds.json batch_pipeline/export_to_gcs/
+            echo "✅ Copied GCP credentials to batch_pipeline/export_to_gcs directory."
+        fi
     fi
     
     # Check for Docker
@@ -775,6 +883,9 @@ verify-spark() {
         fi
         
         echo "✅ Spark UI should be accessible at http://localhost:8080"
+        
+        # Check and fix GCS connector configuration
+        check_fix_gcs_config
     else
         echo "❌ Spark is NOT running."
         echo "Try starting Spark with 'start-spark' command."
