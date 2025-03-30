@@ -3,6 +3,7 @@ supply_chain_finance/
 gcp-creds.json
 .env
 batch_pipeline/export_to_gcs/gcp-creds.json
+streaming_pipeline/gcp-creds.json
 
 # Python
 __pycache__/
