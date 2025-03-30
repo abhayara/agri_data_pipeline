@@ -84,6 +84,7 @@ services:
 networks:
   ${PROJECT_NAME}-network:
     external: true
+    name: ${PROJECT_NAME}-network
 
 volumes:
   postgres-db-volume: 

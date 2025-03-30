@@ -31,4 +31,5 @@ resource "google_storage_bucket" "gcp-storage" {
 resource "google_bigquery_dataset" "bigquery-dataset" {
   dataset_id = var.bq_dataset_name
   location = var.location
+  project = "agri-data-454414"
 }
