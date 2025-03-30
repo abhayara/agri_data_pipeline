@@ -22,11 +22,46 @@ start-kafka() {
 
 # Function to start Spark
 start-spark() {
+    echo "==========================================================="
+    echo "Starting Spark services..."
+    
+    # Check environment first
+    check-environment || { echo "⛔ Environment check failed. Please fix the issues before continuing."; return 1; }
+    
+    # Ensure GCS configuration is ready
+    check_fix_gcs_config
+    
     # Ensure the build script is executable and run it
     chmod +x ./docker/spark/build.sh
     ./docker/spark/build.sh
-	# Start Spark containers
-	docker-compose -f ./docker/spark/docker-compose.yml --env-file ./.env up -d
+    
+    # Start Spark containers
+    docker-compose -f ./docker/spark/docker-compose.yml --env-file ./.env up -d
+    
+    # Wait for containers to start
+    echo "Waiting for Spark containers to start..."
+    sleep 10
+    
+    # Check if Spark master is running
+    if docker ps | grep -q "${PROJECT_NAME}-spark-master"; then
+        echo "✅ Spark master is running."
+        
+        # Install JARs to Spark container if the script exists
+        if [ -f "./batch_pipeline/install_jars.sh" ]; then
+            echo "Installing JAR dependencies to Spark container..."
+            ./batch_pipeline/install_jars.sh
+            echo "✅ JAR dependencies installed to Spark container."
+        else
+            echo "⚠️ JAR installation script not found. Run check_fix_gcs_config first."
+        fi
+    else
+        echo "❌ Spark master failed to start. Check logs with 'docker logs ${PROJECT_NAME}-spark-master'"
+        return 1
+    fi
+    
+    echo "Spark services started successfully."
+    echo "==========================================================="
+    return 0
 }
 
 # Function to start Airflow
@@ -202,6 +237,143 @@ check_fix_gcs_config() {
             git commit -m "Fix type mismatch issues in sample data generation"
         else
             echo "✅ Type handling is already correctly configured."
+        fi
+        
+        # Check for extraClassPath configuration - remove hardcoded paths
+        if grep -q "/.ivy2/jars/" "$GCS_PIPELINE_FILE"; then
+            echo "Fixing extraClassPath configuration to use relative paths..."
+            # Remove hardcoded paths for extraClassPath
+            sed -i 's/.config("spark.driver.extraClassPath", "\/home\/abhay\/.ivy2\/jars\/\*")/.config("spark.driver.extraClassPath", "\/usr\/local\/spark\/jars\/\*")/g' "$GCS_PIPELINE_FILE"
+            sed -i 's/.config("spark.executor.extraClassPath", "\/home\/abhay\/.ivy2\/jars\/\*")/.config("spark.executor.extraClassPath", "\/usr\/local\/spark\/jars\/\*")/g' "$GCS_PIPELINE_FILE"
+            echo "✅ Fixed extraClassPath configuration."
+            
+            # Record this change in git
+            git add "$GCS_PIPELINE_FILE"
+            git commit -m "Fix extraClassPath configuration in pipeline.py"
+        fi
+        
+        # Download the necessary JARs if not already present
+        echo "Checking for necessary JAR dependencies..."
+        LOCAL_JAR_DIR="./batch_pipeline/jars"
+        mkdir -p $LOCAL_JAR_DIR
+        
+        # Define the necessary JAR files
+        JARS=(
+            "https://repo1.maven.org/maven2/com/google/cloud/bigdataoss/gcs-connector/hadoop3-2.2.11/gcs-connector-hadoop3-2.2.11.jar"
+            "https://repo1.maven.org/maven2/com/google/guava/guava/31.1-jre/guava-31.1-jre.jar"
+        )
+        
+        # Download each JAR file if it's not already present
+        for jar_url in "${JARS[@]}"; do
+            jar_name=$(basename $jar_url)
+            if [ ! -f "$LOCAL_JAR_DIR/$jar_name" ]; then
+                echo "Downloading $jar_name..."
+                if command -v wget &> /dev/null; then
+                    wget -q -O "$LOCAL_JAR_DIR/$jar_name" $jar_url
+                elif command -v curl &> /dev/null; then
+                    curl -s -o "$LOCAL_JAR_DIR/$jar_name" $jar_url
+                else
+                    echo "❌ Neither wget nor curl is available. Cannot download JARs."
+                    echo "Please install wget or curl, or manually download the needed JARs."
+                fi
+                
+                if [ -f "$LOCAL_JAR_DIR/$jar_name" ]; then
+                    echo "✅ Downloaded $jar_name successfully."
+                else
+                    echo "❌ Failed to download $jar_name."
+                fi
+            else
+                echo "✅ $jar_name already exists."
+            fi
+        done
+        
+        # Add a script to install jars in the docker container
+        INSTALL_SCRIPT="./batch_pipeline/install_jars.sh"
+        if [ ! -f "$INSTALL_SCRIPT" ]; then
+            echo "Creating installation script for Spark JARs..."
+            cat > "$INSTALL_SCRIPT" << 'EOF'
+#!/bin/bash
+# Script to install GCS connector jars to the Spark container
+
+CONTAINER_NAME="agri_data_pipeline-spark-master"
+LOCAL_JAR_DIR="./batch_pipeline/jars"
+CONTAINER_JAR_DIR="/usr/local/spark/jars"
+
+if [ ! -d "$LOCAL_JAR_DIR" ]; then
+    echo "JAR directory not found at $LOCAL_JAR_DIR"
+    exit 1
+fi
+
+if ! docker ps | grep -q "$CONTAINER_NAME"; then
+    echo "Spark container $CONTAINER_NAME is not running"
+    exit 1
+fi
+
+# Copy each JAR file to the Spark container
+for jar_file in "$LOCAL_JAR_DIR"/*.jar; do
+    if [ -f "$jar_file" ]; then
+        jar_name=$(basename "$jar_file")
+        echo "Copying $jar_name to Spark container..."
+        docker cp "$jar_file" "$CONTAINER_NAME:$CONTAINER_JAR_DIR/$jar_name"
+        if [ $? -eq 0 ]; then
+            echo "✅ Successfully copied $jar_name to Spark container"
+        else
+            echo "❌ Failed to copy $jar_name to Spark container"
+        fi
+    fi
+done
+
+echo "All JARs installed to Spark container"
+echo "==========================================================="
+return 0
+}
+
+# Function to fix and restart the batch pipeline
+fix-batch-pipeline() {
+    echo "==========================================================="
+    echo "Fixing and restarting the batch pipeline..."
+    
+    # Check environment first
+    check-environment || { echo "⛔ Environment check failed. Please fix the issues before continuing."; return 1; }
+    
+    # Fix GCS configuration
+    check_fix_gcs_config || { echo "⛔ GCS configuration fix failed."; return 1; }
+    
+    # Restart Spark to apply changes
+    echo "Restarting Spark services to apply changes..."
+    stop-spark
+    sleep 5
+    start-spark || { echo "⛔ Failed to start Spark services."; return 1; }
+    
+    # Wait for Spark to be fully operational
+    echo "Waiting for Spark to be fully operational..."
+    sleep 15
+    
+    # Run the batch pipeline
+    echo "Running the batch pipeline with fixed configuration..."
+    start-batch-pipeline
+    
+    echo "Batch pipeline fix and restart process completed."
+    echo "==========================================================="
+    return 0
+}
+
+EOF
+            chmod +x "$INSTALL_SCRIPT"
+            echo "✅ Created installation script at $INSTALL_SCRIPT"
+            
+            # Record this change in git
+            git add "$INSTALL_SCRIPT"
+            git commit -m "Add script to install GCS connector JARs to Spark container"
+        fi
+        
+        # Run the installation script if Spark is running
+        if docker ps | grep -q "agri_data_pipeline-spark-master"; then
+            echo "Installing JARs to Spark container..."
+            $INSTALL_SCRIPT
+            echo "✅ JARs installed to Spark container"
+        else
+            echo "⚠️ Spark container is not running. JARs will be installed when Spark is started."
         fi
     else
         echo "❌ Batch pipeline file not found at $GCS_PIPELINE_FILE."
@@ -1418,6 +1590,63 @@ run-dbt() {
         return 1; 
     }
     
+    # Check if models directory contains SQL files
+    if [ ! -d "models" ] || [ -z "$(find models -name "*.sql" 2>/dev/null)" ]; then
+        echo "⚠️ No SQL model files found in the models directory."
+        echo "Checking if SQL files need to be created..."
+        
+        # Check if schema.yml files exist without corresponding SQL files
+        if [ -n "$(find models -name "schema.yml" 2>/dev/null)" ]; then
+            echo "Found schema.yml files but no SQL models. This likely indicates a setup issue."
+            echo "Please run 'git pull' to get the latest code or check the project documentation."
+        fi
+        
+        echo "Would you like to continue anyway? (yes/no)"
+        read -r continue_without_models
+        if [[ "$continue_without_models" != "yes" ]]; then
+            echo "❌ Aborting DBT transformation."
+            cd ..
+            return 1
+        fi
+    fi
+    
+    # Check if source tables exist in BigQuery
+    echo "Checking if source tables exist in BigQuery..."
+    dbt debug --profiles-dir .
+    
+    if [ $? -ne 0 ]; then
+        echo "❌ DBT configuration has issues. Please fix them before continuing."
+        
+        # Check if seed data exists
+        if [ ! -d "seeds" ] || [ -z "$(find seeds -name "*.csv" 2>/dev/null)" ]; then
+            echo "⚠️ No seed data found. You may need to create and load seed data first."
+            echo "Would you like to create seed data now? (yes/no)"
+            read -r create_seeds
+            if [[ "$create_seeds" == "yes" ]]; then
+                cd ..
+                create-dbt-seeds
+                cd business_transformations || return 1
+            fi
+        fi
+        
+        # Check if seed data has been loaded
+        echo "Would you like to load seed data now? (yes/no)"
+        read -r load_seeds
+        if [[ "$load_seeds" == "yes" ]]; then
+            echo "Loading seed data..."
+            dbt seed --profiles-dir .
+            if [ $? -ne 0 ]; then
+                echo "❌ Failed to load seed data. Please check your BigQuery connection and permissions."
+                cd ..
+                return 1
+            fi
+        else
+            echo "❌ Cannot proceed without source data in BigQuery."
+            cd ..
+            return 1
+        fi
+    fi
+    
     # Run DBT
     echo "Running DBT models..."
     dbt run --profiles-dir .
@@ -1427,6 +1656,7 @@ run-dbt() {
         echo "✅ DBT transformations completed successfully!"
     else
         echo "❌ DBT transformations failed. Check the logs for more information."
+        cd ..
         return 1
     fi
     
@@ -1614,9 +1844,18 @@ help() {
     echo "Maintenance and Troubleshooting:"
     echo "  check-environment       - Check and validate environment setup"
     echo "  check_fix_kafka_config  - Check and fix Kafka configuration issues"
+    echo "  check_fix_gcs_config    - Check and fix GCS connector configuration for Spark"
     echo "  ensure_broker_hostname_resolution - Ensure Kafka broker hostname resolution"
     echo "  restart-kafka-with-config - Restart Kafka with proper configuration"
+    echo "  fix-batch-pipeline      - Fix and restart the batch pipeline with GCS connector"
     echo "  git_checkpoint \"Message\" - Create a Git checkpoint with custom message"
+    echo
+    echo "DBT Operations:"
+    echo "  initialize-dbt          - Initialize DBT environment, create and load seeds, run models"
+    echo "  run-dbt                 - Run the DBT models"
+    echo "  serve-dbt-docs          - Generate and serve DBT documentation"
+    echo "  generate-dbt-docs       - Generate DBT documentation without serving"
+    echo "  create-dbt-seeds        - Create seed files for DBT testing"
     echo
     echo "Usage example:"
     echo "  source commands.sh"
@@ -1633,3 +1872,275 @@ else
     echo "Please source this script instead of running it directly:"
     echo "  source commands.sh"
 fi
+
+# Function to create seed files for DBT
+create-dbt-seeds() {
+    echo "==========================================================="
+    echo "Creating seed files for DBT testing..."
+    
+    # Change to the business_transformations directory
+    cd business_transformations || { 
+        echo "❌ Could not find business_transformations directory."; 
+        return 1; 
+    }
+    
+    # Create seeds directory if it doesn't exist
+    mkdir -p seeds
+    
+    # Create farm seed file
+    echo "Creating farm seed file..."
+    cat > seeds/seed_farm.csv << 'EOL'
+farm_id,farm_name,location,size_hectares,established_date
+1,Green Valley Farm,California,150,2005-06-15
+2,Sunshine Acres,Florida,75,2010-03-22
+3,Mountain Ridge Farm,Colorado,200,1998-09-10
+4,Riverside Plantation,Louisiana,300,1985-11-30
+5,Prairie Wind Farm,Kansas,450,2001-04-18
+6,Coastal Breeze Farm,Oregon,120,2015-07-05
+7,Golden Field Farm,Iowa,250,1992-02-14
+8,Blue Sky Ranch,Montana,500,1978-08-20
+9,Eastern Morning Farm,New York,85,2018-05-11
+10,Southern Harvest Farm,Georgia,180,2008-10-25
+EOL
+
+    # Create crop seed file
+    echo "Creating crop seed file..."
+    cat > seeds/seed_crop.csv << 'EOL'
+crop_id,crop_name,crop_type,growing_season,water_needs
+1,Corn,Grain,Summer,Medium
+2,Wheat,Grain,Winter,Low
+3,Soybeans,Legume,Summer,Medium
+4,Tomatoes,Vegetable,Summer,High
+5,Lettuce,Vegetable,Spring,Medium
+6,Apples,Fruit,Annual,Medium
+7,Strawberries,Fruit,Spring,High
+8,Cotton,Fiber,Summer,Medium
+9,Rice,Grain,Summer,Very High
+10,Potatoes,Vegetable,Spring,Medium
+EOL
+
+    # Create weather seed file
+    echo "Creating weather seed file..."
+    cat > seeds/seed_weather.csv << 'EOL'
+weather_id,date,location,temperature,precipitation,humidity
+1,2023-01-15,California,18,0,45
+2,2023-01-15,Florida,25,5,70
+3,2023-01-15,Colorado,5,10,30
+4,2023-01-15,Louisiana,22,15,80
+5,2023-01-15,Kansas,8,0,35
+6,2023-02-15,California,20,10,50
+7,2023-02-15,Florida,27,20,75
+8,2023-02-15,Colorado,3,15,40
+9,2023-02-15,Louisiana,24,25,85
+10,2023-02-15,Kansas,10,5,45
+EOL
+
+    # Create soil seed file
+    echo "Creating soil seed file..."
+    cat > seeds/seed_soil.csv << 'EOL'
+soil_id,farm_id,ph_level,nutrient_content,texture,organic_matter
+1,1,6.8,High,Loam,4.5
+2,2,6.2,Medium,Sandy,2.8
+3,3,7.1,Low,Clay,3.2
+4,4,6.5,High,Silty,5.1
+5,5,7.3,Medium,Sandy Loam,3.9
+6,6,6.9,High,Clay Loam,4.7
+7,7,7.0,Medium,Silt Loam,3.5
+8,8,6.3,Low,Sandy Clay,2.6
+9,9,6.7,Medium,Loamy Sand,3.0
+10,10,7.2,High,Silty Clay,4.2
+EOL
+
+    # Create harvest seed file
+    echo "Creating harvest seed file..."
+    cat > seeds/seed_harvest.csv << 'EOL'
+harvest_id,farm_id,crop_id,harvest_date,yield_amount,quality_grade
+1,1,1,2023-09-15,450,A
+2,2,4,2023-07-20,300,B
+3,3,2,2023-08-05,500,A
+4,4,8,2023-10-10,200,C
+5,5,3,2023-09-01,350,B
+6,6,6,2023-10-30,400,A
+7,7,1,2023-09-25,550,A
+8,8,2,2023-08-15,480,B
+9,9,7,2023-06-10,150,A
+10,10,3,2023-09-10,320,B
+EOL
+
+    # Create production seed file
+    echo "Creating production seed file..."
+    cat > seeds/seed_production.csv << 'EOL'
+production_id,farm_id,crop_id,date,quantity_produced,cost
+1,1,1,2023-09-15,450,9000
+2,2,4,2023-07-20,300,7500
+3,3,2,2023-08-05,500,10000
+4,4,8,2023-10-10,200,6000
+5,5,3,2023-09-01,350,8750
+6,6,6,2023-10-30,400,12000
+7,7,1,2023-09-25,550,11000
+8,8,2,2023-08-15,480,9600
+9,9,7,2023-06-10,150,6000
+10,10,3,2023-09-10,320,8000
+EOL
+
+    # Create yield seed file
+    echo "Creating yield seed file..."
+    cat > seeds/seed_yield.csv << 'EOL'
+yield_id,farm_id,crop_id,harvest_id,yield_per_hectare,year
+1,1,1,1,3.0,2023
+2,2,4,2,4.0,2023
+3,3,2,3,2.5,2023
+4,4,8,4,0.67,2023
+5,5,3,5,0.78,2023
+6,6,6,6,3.33,2023
+7,7,1,7,2.2,2023
+8,8,2,8,0.96,2023
+9,9,7,9,1.76,2023
+10,10,3,10,1.78,2023
+EOL
+
+    # Create sustainability seed file
+    echo "Creating sustainability seed file..."
+    cat > seeds/seed_sustainability.csv << 'EOL'
+sustainability_id,farm_id,date,water_usage,carbon_footprint,pesticide_usage
+1,1,2023-09-15,45000,5000,120
+2,2,2023-07-20,30000,3500,75
+3,3,2023-08-05,40000,4500,100
+4,4,2023-10-10,60000,7000,150
+5,5,2023-09-01,52000,6000,130
+6,6,2023-10-30,38000,4200,90
+7,7,2023-09-25,49000,5500,110
+8,8,2023-08-15,58000,6800,140
+9,9,2023-06-10,25000,2800,60
+10,10,2023-09-10,42000,4800,105
+EOL
+
+    echo "✅ Seed files created successfully!"
+    
+    # Return to the original directory
+    cd ..
+    
+    echo "==========================================================="
+    echo "To load the seed data, use the 'run-dbt-seeds' command."
+    echo "==========================================================="
+}
+
+# Function to run DBT seeds
+run-dbt-seeds() {
+    echo "==========================================================="
+    echo "Loading DBT seed data into BigQuery..."
+    
+    # Check that DBT is installed
+    if ! command -v dbt &> /dev/null; then
+        echo "❌ DBT is not installed. Installing dbt-bigquery..."
+        pip install dbt-bigquery
+    fi
+    
+    # Change to the business_transformations directory
+    cd business_transformations || { 
+        echo "❌ Could not find business_transformations directory."; 
+        return 1; 
+    }
+    
+    # Check if seeds directory exists and has CSV files
+    if [ ! -d "seeds" ] || [ -z "$(find seeds -name "*.csv" 2>/dev/null)" ]; then
+        echo "❌ No seed files found. Please run 'create-dbt-seeds' first."
+        cd ..
+        return 1
+    fi
+    
+    # Run DBT seed
+    echo "Loading seed data..."
+    dbt seed --profiles-dir .
+    
+    # Check the exit status
+    if [ $? -eq 0 ]; then
+        echo "✅ Seed data loaded successfully!"
+    else
+        echo "❌ Failed to load seed data. Check the logs for more information."
+        cd ..
+        return 1
+    fi
+    
+    # Return to the original directory
+    cd ..
+    
+    echo "==========================================================="
+    echo "Seed data loaded! You can now run 'run-dbt' to build the models."
+    echo "==========================================================="
+}
+
+# Function to initialize the DBT environment
+initialize-dbt() {
+    echo "==========================================================="
+    echo "Initializing DBT environment for agricultural data analysis..."
+    
+    # Check that DBT is installed
+    if ! command -v dbt &> /dev/null; then
+        echo "❌ DBT is not installed. Installing dbt-bigquery..."
+        pip install dbt-bigquery
+    fi
+    
+    # Check GCP credentials
+    if [ ! -f ./gcp-creds.json ]; then
+        echo "❌ GCP credentials file (gcp-creds.json) not found."
+        echo "Please create a service account key file and place it in the project root."
+        return 1
+    fi
+    
+    # Create seed data
+    echo "Creating seed data for DBT..."
+    create-dbt-seeds
+    
+    # Load seed data
+    echo "Loading seed data into BigQuery..."
+    cd business_transformations || { 
+        echo "❌ Could not find business_transformations directory."; 
+        return 1; 
+    }
+    
+    # Run DBT debug to check configuration
+    echo "Verifying DBT configuration..."
+    dbt debug --profiles-dir .
+    
+    if [ $? -ne 0 ]; then
+        echo "❌ DBT configuration has issues. Please fix them before continuing."
+        cd ..
+        return 1
+    fi
+    
+    # Load seed data
+    echo "Loading seed data..."
+    dbt seed --profiles-dir .
+    
+    if [ $? -ne 0 ]; then
+        echo "❌ Failed to load seed data. Check the logs for more information."
+        cd ..
+        return 1
+    fi
+    
+    # Run DBT models
+    echo "Running DBT models..."
+    dbt run --profiles-dir .
+    
+    # Check the exit status
+    if [ $? -eq 0 ]; then
+        echo "✅ DBT models ran successfully!"
+    else
+        echo "❌ DBT models failed to run. Check the logs for more information."
+        cd ..
+        return 1
+    fi
+    
+    # Generate documentation
+    echo "Generating DBT documentation..."
+    dbt docs generate --profiles-dir .
+    
+    # Return to the original directory
+    cd ..
+    
+    echo "==========================================================="
+    echo "DBT environment has been successfully initialized!"
+    echo "You can now use 'run-dbt' to run models and 'serve-dbt-docs' to view documentation."
+    echo "==========================================================="
+}

@@ -15,9 +15,13 @@ def create_spark_session():
     """Create and configure a Spark session."""
     spark = SparkSession.builder \
         .appName("AgriDataBatchProcessing") \
-        .config("spark.jars.packages", "org.apache.hadoop:hadoop-aws:3.3.1") \
+        .config("spark.jars.packages", "org.apache.hadoop:hadoop-aws:3.3.1,com.google.cloud.bigdataoss:gcs-connector:hadoop3-2.2.11,com.google.guava:guava:31.1-jre") \
         .config("spark.hadoop.google.cloud.auth.service.account.enable", "true") \
         .config("spark.hadoop.google.cloud.auth.service.account.json.keyfile", GOOGLE_APPLICATION_CREDENTIALS) \
+        .config("spark.hadoop.fs.gs.impl", "com.google.cloud.hadoop.fs.gcs.GoogleHadoopFileSystem") \
+        .config("spark.hadoop.fs.AbstractFileSystem.gs.impl", "com.google.cloud.hadoop.fs.gcs.GoogleHadoopFS") \
+        .config("spark.driver.extraClassPath", "/home/abhay/.ivy2/jars/*") \
+        .config("spark.executor.extraClassPath", "/home/abhay/.ivy2/jars/*") \
         .config("spark.executor.memory", "1g") \
         .config("spark.driver.memory", "1g") \
         .getOrCreate()
@@ -172,7 +176,7 @@ def create_sample_data(spark):
         soil_ph = round(random.uniform(5.5, 8.5), 1)
         soil_moisture = round(random.uniform(10.0, 50.0), 1)
         soil_temp = round(random.uniform(15.0, 30.0), 1)
-        soil_fertility = random.randint(1, 10)
+        soil_fertility = int(random.randint(1, 10))
         
         weather_temp = round(random.uniform(15.0, 35.0), 1)
         weather_humidity = round(random.uniform(30.0, 90.0), 1)
@@ -180,13 +184,13 @@ def create_sample_data(spark):
         weather_sunlight = round(random.uniform(2.0, 12.0), 1)
         
         irrigation_method = random.choice(irrigation_methods)
-        irrigation_amount = 0 if irrigation_method == "None" else round(random.uniform(500.0, 5000.0), 2)
+        irrigation_amount = 0.0 if irrigation_method == "None" else round(random.uniform(500.0, 5000.0), 2)
         
         fertilizer_type = random.choice(fertilizer_types)
-        fertilizer_amount = 0 if fertilizer_type == "None" else round(random.uniform(50.0, 500.0), 2)
+        fertilizer_amount = 0.0 if fertilizer_type == "None" else round(random.uniform(50.0, 500.0), 2)
         
         pesticide_type = random.choice(pesticide_types)
-        pesticide_amount = 0 if pesticide_type == "None" else round(random.uniform(1.0, 20.0), 2)
+        pesticide_amount = 0.0 if pesticide_type == "None" else round(random.uniform(1.0, 20.0), 2)
         
         equipment_used = random.choice(equipment)
         labor_hours = round(random.uniform(10.0, 100.0), 1)
@@ -197,17 +201,17 @@ def create_sample_data(spark):
         profit_margin = round((total_revenue - production_cost) / total_revenue * 100, 2)
         
         storage_method = random.choice(storage_methods)
-        storage_duration = random.randint(0, 365)
+        storage_duration = int(random.randint(0, 365))
         
         transportation_method = random.choice(transportation_methods)
-        transportation_distance = random.randint(10, 5000)
+        transportation_distance = int(random.randint(10, 5000))
         
         quality_grade = random.choice(quality_grades)
         certification = random.choice(certifications)
         
         carbon_footprint = round(random.uniform(100.0, 1000.0), 2)
         water_footprint = round(random.uniform(500.0, 5000.0), 2)
-        sustainability_score = random.randint(1, 10)
+        sustainability_score = int(random.randint(1, 10))
         
         market_destination = random.choice(markets)
         customer_segment = random.choice(customers)
