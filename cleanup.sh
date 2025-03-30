@@ -1,5 +1,16 @@
 #!/bin/bash
 
+# DEPRECATION NOTICE
+echo -e "\033[1;31mDEPRECATION NOTICE\033[0m"
+echo -e "\033[1;31m====================\033[0m"
+echo -e "\033[1;33mThis script is deprecated and will be removed in a future version.\033[0m"
+echo -e "\033[1;33mPlease use the new unified build script instead:\033[0m"
+echo -e "\033[1;36m  ./build.sh --clean-only\033[0m"
+echo -e "\033[1;33mFor more information, see BUILD_README.md\033[0m"
+echo -e "\033[1;31m====================\033[0m"
+echo "Continuing execution in 5 seconds..."
+sleep 5
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
