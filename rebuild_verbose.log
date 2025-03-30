@@ -313,3 +313,45 @@ time="2025-03-30T10:09:30Z" level=warning msg="/home/abhay/DE1/agri_data_pipelin
  Container agri_data_pipeline-pgadmin  Started
 [0;32m✓ PostgreSQL container started[0m
 [0;32m✓ Container agri_data_pipeline-postgres is running[0m
+[dbt-cloud 46d6f56] Checkpoint: PostgreSQL setup complete - 2025-03-30 10:08:16
+ 1 file changed, 17 insertions(+)
+
+[0;32m============================================================[0m
+[0;32m== 5. Starting Airflow[0m
+[0;32m============================================================[0m
+time="2025-03-30T10:09:31Z" level=warning msg="/home/abhay/DE1/agri_data_pipeline/docker/airflow/docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+ Container airflow-postgres-1  Creating
+ Container airflow-postgres-1  Created
+ Container airflow-airflow-init-1  Creating
+ Container airflow-airflow-init-1  Created
+ Container airflow-airflow-scheduler-1  Creating
+ Container airflow-airflow-webserver-1  Creating
+ Container airflow-airflow-scheduler-1  Created
+ Container airflow-airflow-webserver-1  Created
+ Container airflow-postgres-1  Starting
+ Container airflow-postgres-1  Started
+ Container airflow-airflow-init-1  Starting
+ Container airflow-airflow-init-1  Started
+ Container airflow-postgres-1  Waiting
+ Container airflow-airflow-init-1  Waiting
+ Container airflow-airflow-init-1  Waiting
+ Container airflow-postgres-1  Waiting
+ Container airflow-postgres-1  Healthy
+ Container airflow-postgres-1  Healthy
+ Container airflow-airflow-init-1  Exited
+ Container airflow-airflow-scheduler-1  Starting
+ Container airflow-airflow-init-1  Exited
+ Container airflow-airflow-webserver-1  Starting
+ Container airflow-airflow-scheduler-1  Started
+ Container airflow-airflow-webserver-1  Started
+[0;32m✓ Airflow containers started[0m
+Waiting for Airflow to be ready...
+[0;32m✓ Container airflow-airflow-webserver-1 is running[0m
+
+[0;32m============================================================[0m
+[0;32m== 5.1. Fixing Airflow DAGs[0m
+[0;32m============================================================[0m
+[0;32m✓ Created Airflow helper functions[0m
+[0;32m✓ Updated GCS to BigQuery DAG[0m
+[0;32m✓ Created Kafka consumer module for Airflow[0m
+[0;32m✓ Updated Kafka to GCS DAG[0m
