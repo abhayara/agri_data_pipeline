@@ -1,5 +1,9 @@
 import socket
 import time
+import os
+
+# Get broker IP from environment or use default
+broker_ip = os.environ.get('BROKER_IP', '192.168.80.3')
 
 # Attempt to resolve broker hostname
 def resolve_broker():
@@ -15,8 +19,11 @@ def resolve_broker():
 if __name__ == "__main__":
     print("Attempting to resolve broker hostname...")
     if not resolve_broker():
-        print("Adding broker to /etc/hosts as a fallback...")
-        with open('/etc/hosts', 'a') as hosts_file:
-            hosts_file.write('172.30.0.3 broker\n')
-        time.sleep(1)
-        resolve_broker()
+        print(f"Adding broker {broker_ip} to /etc/hosts as a fallback...")
+        try:
+            with open('/etc/hosts', 'a') as hosts_file:
+                hosts_file.write(f'{broker_ip} broker\n')
+            time.sleep(1)
+            resolve_broker()
+        except Exception as e:
+            print(f"Error updating hosts file: {e}")

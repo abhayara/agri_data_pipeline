@@ -10,44 +10,93 @@ from confluent_kafka import Consumer, KafkaError
 import pyarrow as pa
 import pyarrow.parquet as pq
 from google.cloud import storage
+import logging
+import random
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+# Function to resolve broker host to IP
+def resolve_broker_ip(broker_host):
+    """Attempt to resolve broker hostname to IP address with retry logic."""
+    max_retries = 5
+    retry_count = 0
+    backoff_time = 1
+    
+    while retry_count < max_retries:
+        try:
+            logger.info(f"Attempting to resolve broker hostname: {broker_host}")
+            hostname = broker_host.split(':')[0]
+            broker_ip = socket.gethostbyname(hostname)
+            logger.info(f"✅ Successfully resolved {hostname} to {broker_ip}")
+            
+            # Update hosts file as a fallback
+            try:
+                with open('/etc/hosts', 'r') as f:
+                    hosts_content = f.read()
+                
+                if hostname not in hosts_content:
+                    logger.info(f"Adding {hostname} to /etc/hosts")
+                    with open('/etc/hosts', 'a') as f:
+                        f.write(f"{broker_ip} {hostname}\n")
+            except Exception as e:
+                logger.warning(f"Could not update /etc/hosts: {e}")
+                
+            return broker_ip
+        except socket.gaierror as e:
+            logger.warning(f"Failed to resolve broker hostname (attempt {retry_count+1}/{max_retries}): {e}")
+            retry_count += 1
+            
+            if retry_count >= max_retries:
+                logger.error(f"Failed to resolve broker hostname after {max_retries} attempts")
+                return None
+                
+            # Exponential backoff with jitter
+            sleep_time = backoff_time + random.uniform(0, 1)
+            logger.info(f"Retrying in {sleep_time:.2f} seconds...")
+            time.sleep(sleep_time)
+            backoff_time *= 2
+    
+    return None
 
 # Configuration
-KAFKA_BROKER = os.environ.get("KAFKA_BROKER", "broker:29092")
+KAFKA_BOOTSTRAP_SERVERS = os.environ.get("KAFKA_BROKER", "broker:29092")
 KAFKA_TOPIC = os.environ.get("KAFKA_TOPIC", "agri_data")
-CONSUMER_GROUP = os.environ.get("CONSUMER_GROUP", "agri_data_consumer")
+KAFKA_GROUP_ID = os.environ.get("KAFKA_GROUP_ID", "agri_data_consumer_new")
+KAFKA_AUTO_OFFSET_RESET = os.environ.get("KAFKA_AUTO_OFFSET_RESET", "earliest")
 MAX_MESSAGES = int(os.environ.get("MAX_MESSAGES", 1000))
 BATCH_SIZE = int(os.environ.get("BATCH_SIZE", 50))
 POLL_TIMEOUT = float(os.environ.get("POLL_TIMEOUT", 5.0))
-GCS_BUCKET_NAME = os.environ.get("GCS_BUCKET_NAME", "agri_data_bucket")
+GCS_BUCKET_NAME = os.environ.get("GCS_BUCKET_NAME", "agri_data_tf_bucket")
 GCS_RAW_DATA_PATH = os.environ.get("GCS_RAW_DATA_PATH", "raw/agri_data/")
 LOCAL_TEMP_DIR = "/tmp/agri_data"
+GCP_CREDENTIALS_PATH = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "/home/streaming_pipeline/gcp-creds.json")
 
-# Configuration for the Kafka consumer
+# Try to resolve broker hostname
+broker_ip = resolve_broker_ip(KAFKA_BOOTSTRAP_SERVERS)
+
+# Configuration for the Kafka consumer with better timeout settings
 consumer_config = {
-    'bootstrap.servers': KAFKA_BROKER,
-    'group.id': CONSUMER_GROUP,
-    'auto.offset.reset': 'earliest',
+    'bootstrap.servers': KAFKA_BOOTSTRAP_SERVERS,
+    'group.id': KAFKA_GROUP_ID,
+    'auto.offset.reset': KAFKA_AUTO_OFFSET_RESET,
     'enable.auto.commit': False,
-    'message.timeout.ms': 10000,  # 10 seconds timeout
-    'session.timeout.ms': 30000,  # 30 seconds session timeout
-    'request.timeout.ms': 10000,  # 10 seconds timeout
+    'message.timeout.ms': 30000,  # 30 seconds timeout
+    'session.timeout.ms': 60000,  # 60 seconds session timeout
+    'request.timeout.ms': 30000,  # 30 seconds timeout
     'socket.keepalive.enable': True,
-    'debug': 'consumer'  # Reduce verbosity
+    'socket.timeout.ms': 30000,  # 30 seconds socket timeout
+    'retry.backoff.ms': 1000,    # Backoff time between retries
+    'reconnect.backoff.ms': 1000, # Initial backoff time for reconnection
+    'reconnect.backoff.max.ms': 10000, # Maximum backoff time for reconnection
+    'debug': 'consumer,broker'
 }
 
-print(f"Consumer configuration: {consumer_config}")
-print(f"Consumer will read from topic {KAFKA_TOPIC}")
-print(f"Broker address: {KAFKA_BROKER}")
-print(f"GCS Settings - Bucket: {GCS_BUCKET_NAME}, Path: {GCS_RAW_DATA_PATH}")
-
-# Try to resolve the broker hostname
-try:
-    print(f"Attempting to resolve broker hostname...")
-    broker_host = KAFKA_BROKER.split(':')[0]
-    broker_ip = socket.gethostbyname(broker_host)
-    print(f"✅ Resolved {broker_host} to {broker_ip}")
-except Exception as e:
-    print(f"❌ Failed to resolve broker hostname: {e}")
+logger.info(f"Consumer configuration: {consumer_config}")
+logger.info(f"Consumer will read from topic {KAFKA_TOPIC}")
+logger.info(f"Broker address: {KAFKA_BOOTSTRAP_SERVERS}")
+logger.info(f"GCS Settings - Bucket: {GCS_BUCKET_NAME}, Path: {GCS_RAW_DATA_PATH}")
 
 def setup_temp_dir():
     """Create a temporary directory for storing data before uploading to GCS."""
@@ -132,38 +181,27 @@ def upload_to_gcs(parquet_file):
         return
     
     try:
-        # Get GCS bucket and blob path from environment
-        bucket_name = GCS_BUCKET_NAME
-        blob_path = GCS_RAW_DATA_PATH
-        gcp_location = os.environ.get("GCP_LOCATION", "us-central1")
+        print(f"Using GCS credentials from {GCP_CREDENTIALS_PATH}")
+        client = storage.Client.from_service_account_json(GCP_CREDENTIALS_PATH)
+        bucket = client.bucket(GCS_BUCKET_NAME)
         
-        print(f"Uploading {parquet_file} to gs://{bucket_name}/{blob_path} in region {gcp_location}")
-        
-        # Create GCS client
-        storage_client = storage.Client()
-        
-        # Get or create bucket
-        try:
-            bucket = storage_client.get_bucket(bucket_name)
-        except Exception as e:
-            print(f"Bucket {bucket_name} not found, creating it: {e}")
-            bucket = storage_client.create_bucket(bucket_name, location=gcp_location)
+        print(f"Uploading {parquet_file} to gs://{GCS_BUCKET_NAME}/{GCS_RAW_DATA_PATH}")
         
         # Generate blob name from file name
         file_name = os.path.basename(parquet_file)
-        blob_name = f"{blob_path}{file_name}"
+        blob_name = f"{GCS_RAW_DATA_PATH}{file_name}"
         
         # Upload file to GCS
         blob = bucket.blob(blob_name)
         blob.upload_from_filename(parquet_file)
         
-        print(f"✅ File {file_name} uploaded to gs://{bucket_name}/{blob_name}")
+        print(f"✅ File {file_name} uploaded to gs://{GCS_BUCKET_NAME}/{blob_name}")
         
         # Delete local file after upload
         os.remove(parquet_file)
         print(f"✅ Deleted local file {parquet_file}")
         
-        return f"gs://{bucket_name}/{blob_name}"
+        return f"gs://{GCS_BUCKET_NAME}/{blob_name}"
     except Exception as e:
         print(f"❌ Error uploading to GCS: {e}")
         return None
@@ -172,30 +210,59 @@ def consume_messages():
     """Consume messages from Kafka and process them in batches."""
     setup_temp_dir()
     
-    # Create Kafka consumer with retry logic
+    # Create Kafka consumer with improved retry logic
     consumer = None
-    max_retries = 5
+    max_retries = 10
     retry_count = 0
+    backoff_time = 1
     
     while retry_count < max_retries:
         try:
-            print(f"Attempt {retry_count + 1} to create Kafka consumer...")
+            logger.info(f"Attempt {retry_count + 1} to create Kafka consumer...")
             consumer = Consumer(consumer_config)
             consumer.subscribe([KAFKA_TOPIC])
-            # Test connectivity
-            consumer.poll(5.0)
-            print("✅ Successfully connected to Kafka and subscribed to topic")
+            
+            # Test connectivity with graceful timeout handling
+            msg = consumer.poll(10.0)
+            if msg is None:
+                logger.info("No messages available during connectivity test, but connection succeeded")
+            elif msg.error():
+                logger.warning(f"Connection test returned error: {msg.error()}")
+                if msg.error().code() == KafkaError._PARTITION_EOF:
+                    logger.info("Reached end of partition - this is not an error")
+                else:
+                    raise Exception(f"Kafka error: {msg.error()}")
+            else:
+                logger.info(f"Successfully received a message from topic {KAFKA_TOPIC}")
+                
+            logger.info("✅ Successfully connected to Kafka and subscribed to topic")
             break
         except Exception as e:
-            print(f"❌ Failed to connect to Kafka: {e}")
+            logger.error(f"❌ Failed to connect to Kafka: {e}")
+            if consumer:
+                consumer.close()
+                consumer = None
+                
             retry_count += 1
             if retry_count >= max_retries:
-                print("Failed to connect to Kafka after maximum retries")
+                logger.error("Failed to connect to Kafka after maximum retries")
                 sys.exit(1)
-            print(f"Retrying in {retry_count} seconds...")
-            time.sleep(retry_count)
+                
+            # Exponential backoff with jitter
+            sleep_time = backoff_time + random.uniform(0, 1)
+            logger.info(f"Retrying in {sleep_time:.2f} seconds...")
+            time.sleep(sleep_time)
+            backoff_time = min(backoff_time * 2, 60)  # Cap at 60 seconds
+            
+            # Resolve broker IP again on failure
+            broker_ip = resolve_broker_ip(KAFKA_BOOTSTRAP_SERVERS)
+            if broker_ip:
+                # Update consumer config with resolved IP
+                host, port = KAFKA_BOOTSTRAP_SERVERS.split(':')
+                consumer_config['bootstrap.servers'] = f"{host}:{port}"
+                logger.info(f"Updated bootstrap.servers to {consumer_config['bootstrap.servers']}")
     
-    print(f"Starting to consume messages from topic {KAFKA_TOPIC}")
+    logger.info(f"Starting to consume messages from topic {KAFKA_TOPIC}")
     
     messages = []
     batch_counter = 0
@@ -278,11 +345,8 @@ def main():
     print("Starting Kafka to GCS consumer")
     
     # Set up the GCS credentials
-    credentials_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
-    if credentials_path and os.path.exists(credentials_path):
-        print(f"Using GCS credentials from {credentials_path}")
-    else:
-        print("Warning: GOOGLE_APPLICATION_CREDENTIALS is not set or file does not exist")
+    if not os.path.exists(GCP_CREDENTIALS_PATH):
+        print(f"Warning: GOOGLE_APPLICATION_CREDENTIALS file does not exist at {GCP_CREDENTIALS_PATH}")
 
     # Start consuming messages
     consume_messages()

@@ -9,6 +9,55 @@ import socket
 import uuid
 import csv
 import sys
+import logging
+import random
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+# Function to resolve broker host to IP
+def resolve_broker_ip(broker_host):
+    """Attempt to resolve broker hostname to IP address with retry logic."""
+    max_retries = 5
+    retry_count = 0
+    backoff_time = 1
+    
+    while retry_count < max_retries:
+        try:
+            logger.info(f"Attempting to resolve broker hostname: {broker_host}")
+            hostname = broker_host.split(':')[0]
+            broker_ip = socket.gethostbyname(hostname)
+            logger.info(f"✅ Successfully resolved {hostname} to {broker_ip}")
+            
+            # Update hosts file as a fallback
+            try:
+                with open('/etc/hosts', 'r') as f:
+                    hosts_content = f.read()
+                
+                if hostname not in hosts_content:
+                    logger.info(f"Adding {hostname} to /etc/hosts")
+                    with open('/etc/hosts', 'a') as f:
+                        f.write(f"{broker_ip} {hostname}\n")
+            except Exception as e:
+                logger.warning(f"Could not update /etc/hosts: {e}")
+                
+            return broker_ip
+        except socket.gaierror as e:
+            logger.warning(f"Failed to resolve broker hostname (attempt {retry_count+1}/{max_retries}): {e}")
+            retry_count += 1
+            
+            if retry_count >= max_retries:
+                logger.error(f"Failed to resolve broker hostname after {max_retries} attempts")
+                return None
+                
+            # Exponential backoff with jitter
+            sleep_time = backoff_time + random.uniform(0, 1)
+            logger.info(f"Retrying in {sleep_time:.2f} seconds...")
+            time.sleep(sleep_time)
+            backoff_time *= 2
+    
+    return None
 
 # Configuration
 KAFKA_BROKER = os.environ.get("KAFKA_BROKER", "broker:29092")
@@ -16,29 +65,25 @@ KAFKA_TOPIC = os.environ.get("KAFKA_TOPIC", "agri_data")
 NUM_MESSAGES = int(os.environ.get("NUM_MESSAGES", 100))
 MESSAGE_DELAY = float(os.environ.get("MESSAGE_DELAY", 0.5))
 
-# Configuration for the Kafka producer
+# Resolve broker IP
+broker_ip = resolve_broker_ip(KAFKA_BROKER)
+
+# Configuration for the Kafka producer with enhanced reliability settings
 producer_config = {
     'bootstrap.servers': KAFKA_BROKER,
     'client.id': socket.gethostname(),
-    'message.timeout.ms': 10000,  # 10 seconds timeout
-    'request.timeout.ms': 5000,   # 5 seconds timeout
-    'retry.backoff.ms': 500,      # Retry every 500ms
+    'message.timeout.ms': 30000,  # 30 seconds timeout
+    'request.timeout.ms': 10000,   # 10 seconds timeout
+    'retry.backoff.ms': 1000,      # Retry every 1000ms
     'socket.keepalive.enable': True,
-    'debug': 'broker' # Reduce verbosity
+    'reconnect.backoff.ms': 1000,  # Initial backoff for reconnection
+    'reconnect.backoff.max.ms': 10000,  # Max backoff for reconnection
+    'debug': 'broker'  # Only debug broker, removed producer
 }
 
-print(f"Producer configuration: {producer_config}")
-print(f"Producer will send {NUM_MESSAGES} messages to topic {KAFKA_TOPIC} with delay {MESSAGE_DELAY}s")
-print(f"Broker address: {KAFKA_BROKER}")
-
-# Try to resolve the broker hostname
-try:
-    print(f"Attempting to resolve broker hostname...")
-    broker_host = KAFKA_BROKER.split(':')[0]
-    broker_ip = socket.gethostbyname(broker_host)
-    print(f"✅ Resolved {broker_host} to {broker_ip}")
-except Exception as e:
-    print(f"❌ Failed to resolve broker hostname: {e}")
+logger.info(f"Producer configuration: {producer_config}")
+logger.info(f"Producer will send {NUM_MESSAGES} messages to topic {KAFKA_TOPIC} with delay {MESSAGE_DELAY}s")
+logger.info(f"Broker address: {KAFKA_BROKER}")
 
 # Kafka delivery report callback
 def delivery_report(err, msg):
@@ -444,29 +489,46 @@ def generate_record():
     return record
 
 def main():
-    # Create Kafka producer
-    producer = None
-    max_retries = 5
+    """Main function to run the producer."""
+    max_retries = 10
     retry_count = 0
+    backoff_time = 1
     
     while retry_count < max_retries:
         try:
-            print(f"Attempt {retry_count + 1} to create Kafka producer...")
+            logger.info(f"Attempt {retry_count + 1} to create Kafka producer...")
             producer = Producer(producer_config)
-            # Test the connection
-            producer.list_topics(timeout=5.0)
-            print("✅ Successfully connected to Kafka")
+            
+            # Test connectivity by sending a test message
+            test_msg = json.dumps({"test": "connection"}).encode('utf-8')
+            producer.produce(KAFKA_TOPIC, test_msg, callback=delivery_report)
+            producer.flush(timeout=10)
+            
+            logger.info("✅ Successfully connected to Kafka and sent a test message")
             break
         except Exception as e:
-            print(f"❌ Failed to connect to Kafka: {e}")
+            logger.error(f"❌ Failed to connect to Kafka: {e}")
             retry_count += 1
+            
             if retry_count >= max_retries:
-                print("Failed to connect to Kafka after maximum retries")
+                logger.error(f"Failed to connect to Kafka after {max_retries} attempts")
                 sys.exit(1)
-            print(f"Retrying in {retry_count} seconds...")
-            time.sleep(retry_count)
+            
+            # Exponential backoff with jitter
+            sleep_time = backoff_time + random.uniform(0, 1)
+            logger.info(f"Retrying in {sleep_time:.2f} seconds...")
+            time.sleep(sleep_time)
+            backoff_time = min(backoff_time * 2, 60)  # Cap at 60 seconds
+            
+            # Resolve broker IP again on failure
+            broker_ip = resolve_broker_ip(KAFKA_BROKER)
+            if broker_ip:
+                # Update producer config with resolved IP
+                host, port = KAFKA_BROKER.split(':')
+                producer_config['bootstrap.servers'] = f"{host}:{port}"
+                logger.info(f"Updated bootstrap.servers to {producer_config['bootstrap.servers']}")
     
-    print(f"Starting to produce {NUM_MESSAGES} messages to topic {KAFKA_TOPIC}")
+    logger.info(f"Starting to send {NUM_MESSAGES} messages to topic {KAFKA_TOPIC}...")
     
     # Generate and produce messages
     for i in range(NUM_MESSAGES):
