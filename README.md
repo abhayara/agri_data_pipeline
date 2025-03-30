@@ -293,4 +293,47 @@ This will make the documentation available at http://localhost:8080
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request. 
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## Usage
+
+This project includes several scripts to help you manage and run the data pipeline:
+
+1. `commands.sh` - Contains helpful functions for managing the pipeline
+2. `rebuild.sh` - Rebuilds the entire project
+3. `cleanup.sh` - Cleans up resources when you're done
+
+### Available Commands
+
+Source the commands script to access these functions:
+
+```bash
+source commands.sh
+```
+
+Key functions:
+
+- `start-kafka` - Start Kafka and related services
+- `start-spark` - Start Spark master and workers
+- `start-postgres` - Start PostgreSQL database
+- `start-metabase` - Start Metabase for visualization
+- `start-airflow` - Start Airflow for orchestration
+- `stream-data` - Start the streaming data producer and consumer
+- `start-batch-pipeline` - Run the batch processing of data
+- `verify-kafka`, `verify-producer`, `verify-consumer`, etc. - Verify component status
+- `verify-all` - Run all verification checks
+- `check-environment` - Verify the environment is properly set up
+- `check_fix_kafka_config` - Check and fix Kafka configuration issues
+- `check_fix_gcs_config` - Check and fix Google Cloud Storage connector configuration for Spark
+- `cleanup` - Stop all services and clean up resources
+
+### Google Cloud Storage Connector
+
+The system now automatically checks and fixes Google Cloud Storage (GCS) connector configuration for Spark. The `check_fix_gcs_config` function:
+
+1. Ensures the proper GCS connector dependencies are added to the Spark configuration
+2. Configures the correct filesystem implementation classes for GCS
+3. Copies GCP credentials to the necessary locations
+4. Fixes type mismatch issues in data generation
+
+This enables seamless integration between Spark and Google Cloud Storage for data processing and storage. 
