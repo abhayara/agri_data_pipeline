@@ -1,0 +1,11 @@
+crop_id,crop_name,crop_type,growing_season,water_needs
+1,Corn,Grain,Summer,Medium
+2,Wheat,Grain,Winter,Low
+3,Soybeans,Legume,Summer,Medium
+4,Tomatoes,Vegetable,Summer,High
+5,Lettuce,Vegetable,Spring,Medium
+6,Apples,Fruit,Annual,Medium
+7,Strawberries,Fruit,Spring,High
+8,Cotton,Fiber,Summer,Medium
+9,Rice,Grain,Summer,Very High
+10,Potatoes,Vegetable,Spring,Medium

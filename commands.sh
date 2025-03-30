@@ -1,285 +1,253 @@
-PROJECT_NAME='agri-data'
-EXPORT_TO_BIGQUERY_PIPELINE_UUID='94ab2c7a2aa24bde8e148ef84c88a10f'
-# Check if the network exists; if not, create it
-if ! docker network inspect ${PROJECT_NAME}-network &>/dev/null; then
-    docker network create ${PROJECT_NAME}-network
+#!/bin/bash
+
+# Agricultural Data Pipeline Commands
+# ----------------------------------
+
+# Load environment variables if .env exists
+if [ -f .env ]; then
+    source .env
+    echo "Loaded environment variables from .env"
 else
-    echo "Network ${PROJECT_NAME}-network already exists."
+    echo "Warning: .env file not found. Using default values."
 fi
 
-# Function to check if a port is available
-check_port() {
-    if lsof -Pi :$1 -sTCP:LISTEN -t >/dev/null ; then
-        echo "Port $1 is already in use. Please free up this port before continuing."
+# Set default project name if not set
+if [ -z "$PROJECT_NAME" ]; then
+    export PROJECT_NAME="agri_data_pipeline"
+fi
+
+# Function to display a section header
+section() {
+    echo "========================================"
+    echo "  $1"
+    echo "========================================"
+}
+
+# Function to check if a command exists
+command_exists() {
+    command -v "$1" >/dev/null 2>&1
+}
+
+# Function to install Python dependencies
+install_dependencies() {
+    section "Installing Python Dependencies"
+    
+    if ! command_exists pip; then
+        echo "Error: pip is not installed. Please install Python and pip first."
         return 1
+    fi
+    
+    echo "Installing required Python packages..."
+    pip install -r requirements.txt
+    
+    if [ $? -eq 0 ]; then
+        echo "Successfully installed dependencies."
     else
-        return 0
-    fi
-}
-
-# Function to start streaming data
-stream-data() {
-	docker-compose -f ./docker/streaming/docker-compose.yaml up
-}
-
-# Function to start Kafka
-start-kafka() {
-    # Check Kafka-related ports
-    check_port 9092 && check_port 2181 && check_port 8081 && check_port 9021 && check_port 8082
-    if [ $? -ne 0 ]; then
-        echo "Cannot start Kafka due to port conflict."
+        echo "Error installing dependencies. Please check the output above."
         return 1
     fi
-	docker-compose -f ./docker/kafka/docker-compose.yml up -d
 }
 
-# Function to start Spark
-start-spark() {
-    # Check Spark-related ports
-    check_port 8090 && check_port 8091 && check_port 7077 && check_port 8888
-    if [ $? -ne 0 ]; then
-        echo "Cannot start Spark due to port conflict."
+# Function to check if Kafka is running
+check_kafka() {
+    section "Checking Kafka Status"
+    
+    # Try to connect to Kafka
+    if command_exists nc; then
+        if nc -z localhost 9092 >/dev/null 2>&1; then
+            echo "Kafka is running on port 9092."
+            return 0
+        else
+            echo "Kafka is not running on port 9092."
+            return 1
+        fi
+    else
+        echo "Warning: 'nc' command not found. Cannot check Kafka status."
         return 1
     fi
-    # Ensure the build script is executable and run it
-    chmod +x ./docker/spark/build.sh
-    ./docker/spark/build.sh
-	# Start Spark containers
-	docker-compose -f ./docker/spark/docker-compose.yml up -d
 }
 
-# Function to start Airflow
-start-airflow() {
-   # Check Airflow-related ports
-   check_port 8080
-   if [ $? -ne 0 ]; then
-       echo "Cannot start Airflow due to port conflict."
-       return 1
-   fi
-   docker-compose -f ./docker/airflow/docker-compose.yml up -d
-   echo "Airflow is starting up. It may take a moment..."
-   echo "You can access the Airflow UI at: http://localhost:8080"
-   echo "Username: airflow, Password: airflow"
+# Function to setup local environment
+setup_environment() {
+    section "Setting Up Environment"
+    
+    # Create .env file if it doesn't exist
+    if [ ! -f .env ]; then
+        echo "Creating .env file from .env.example"
+        cp .env.example .env
+        echo "Please edit .env file with your configuration values."
+    fi
+    
+    # Install dependencies
+    install_dependencies
+    
+    echo "Environment setup complete."
 }
 
-# Function to start Postgres
-start-postgres() {
-   # Check Postgres-related ports
-   check_port 5432 && check_port 5050
-   if [ $? -ne 0 ]; then
-       echo "Cannot start Postgres due to port conflict."
-       return 1
-   fi
-   docker-compose -f ./docker/postgres/docker-compose.yml up -d
+# Function to start the producer
+start_producer() {
+    section "Starting Agricultural Data Producer"
+    
+    # Check if dependencies are installed
+    if ! python -c "import confluent_kafka" >/dev/null 2>&1; then
+        echo "Error: confluent_kafka module not found. Installing dependencies..."
+        install_dependencies
+    fi
+    
+    echo "Starting Kafka producer..."
+    python streaming_pipeline/producer.py &
+    PRODUCER_PID=$!
+    echo "Producer started with PID: $PRODUCER_PID"
+    
+    # Export the PID for later use
+    export PRODUCER_PID=$PRODUCER_PID
 }
 
-# Function to start Metabase
-start-metabase() {
-   # Check Metabase-related ports
-   check_port 3000
-   if [ $? -ne 0 ]; then
-       echo "Cannot start Metabase due to port conflict."
-       return 1
-   fi
-   docker-compose -f ./docker/metabase/docker-compose.yml up -d
-}
-
-# Function to stop Kafka
-stop-kafka() {
-    docker-compose -f ./docker/kafka/docker-compose.yml down
-}
-
-# Function to stop Spark
-stop-spark() {
-    docker-compose -f ./docker/spark/docker-compose.yml down
-}
-
-# Function to stop Airflow
-stop-airflow() {
-    docker-compose -f ./docker/airflow/docker-compose.yml down
-}
-
-# Function to stop Postgres
-stop-postgres() {
-    docker-compose -f ./docker/postgres/docker-compose.yml down
-}
-
-# Function to stop Metabase
-stop-metabase() {
-    docker-compose -f ./docker/metabase/docker-compose.yml down
+# Function to start the consumer
+start_consumer() {
+    section "Starting Agricultural Data Consumer"
+    
+    # Check if dependencies are installed
+    if ! python -c "import confluent_kafka, google.cloud" >/dev/null 2>&1; then
+        echo "Error: Required modules not found. Installing dependencies..."
+        install_dependencies
+    fi
+    
+    echo "Starting Kafka consumer..."
+    python streaming_pipeline/consumer.py &
+    CONSUMER_PID=$!
+    echo "Consumer started with PID: $CONSUMER_PID"
+    
+    # Export the PID for later use
+    export CONSUMER_PID=$CONSUMER_PID
 }
 
 # Function to start the streaming pipeline
-start-streaming-pipeline(){
-    # Start Kafka and Airflow, then begin streaming data
-    start-kafka
-    if [ $? -ne 0 ]; then
-        echo "Failed to start Kafka. Aborting pipeline startup."
-        return 1
-    fi
-    sleep 5
-    start-airflow
-    if [ $? -ne 0 ]; then
-        echo "Failed to start Airflow. Aborting pipeline startup."
-        return 1
-    fi
-    sleep 10
-    echo "Triggering data generation DAG in Airflow..."
-    curl -X POST "http://localhost:8080/api/v1/dags/agri_data_generator/dagRuns" \
-    -H "Content-Type: application/json" \
-    -H "Authorization: Basic $(echo -n 'airflow:airflow' | base64)" \
-    -d '{"conf": {}}' || echo "Airflow API may not be ready yet. Please trigger the DAG manually from the Airflow UI."
-    echo "Starting data streaming..."
-    stream-data
+start_streaming() {
+    section "Starting Streaming Pipeline"
+    
+    # Start producer and consumer
+    start_producer
+    start_consumer
+    
+    echo "Streaming pipeline started."
+    echo "Use 'stop_streaming' to stop the streaming pipeline."
 }
 
 # Function to stop the streaming pipeline
-stop-streaming-pipeline(){
-    # Stop Kafka and Airflow
-    stop-kafka
-    stop-airflow
+stop_streaming() {
+    section "Stopping Streaming Pipeline"
+    
+    # Kill producer and consumer if they're running
+    if [ ! -z "$PRODUCER_PID" ]; then
+        echo "Stopping producer (PID: $PRODUCER_PID)..."
+        kill $PRODUCER_PID 2>/dev/null
+        unset PRODUCER_PID
+    fi
+    
+    if [ ! -z "$CONSUMER_PID" ]; then
+        echo "Stopping consumer (PID: $CONSUMER_PID)..."
+        kill $CONSUMER_PID 2>/dev/null
+        unset CONSUMER_PID
+    fi
+    
+    echo "Streaming pipeline stopped."
 }
 
-olap-transformation-pipeline(){
-    # Execute the primary pipeline DAG in Airflow
-    echo "Triggering the main data pipeline in Airflow..."
-    curl -X POST "http://localhost:8080/api/v1/dags/agri_data_pipeline/dagRuns" \
-    -H "Content-Type: application/json" \
-    -H "Authorization: Basic $(echo -n 'airflow:airflow' | base64)" \
-    -d '{"conf": {}}' || echo "Airflow API may not be ready yet. Please trigger the DAG manually from the Airflow UI."
-}
-
-# Function to start the batch processing pipeline
-start-batch-pipeline(){
-    echo "Starting Agricultural Data Batch Pipeline..."
-
-    # Check if Spark is running
-    if ! docker ps | grep -q "spark-master"; then
-        echo "Starting Spark cluster..."
-        start-spark
-        if [ $? -ne 0 ]; then
-            echo "Failed to start Spark. Aborting batch pipeline startup."
-            return 1
-        fi
-        sleep 10  # Allow time for Spark to start
+# Function to run the batch pipeline
+run_batch_pipeline() {
+    section "Running Batch Pipeline"
+    
+    # Check if dependencies are installed
+    if ! python -c "import pyspark" >/dev/null 2>&1; then
+        echo "Error: pyspark module not found. Installing dependencies..."
+        install_dependencies
+    fi
+    
+    echo "Running batch pipeline for ETL processing..."
+    python batch_pipeline/export_to_gcs/pipeline.py
+    
+    if [ $? -eq 0 ]; then
+        echo "Batch pipeline completed successfully."
     else
-        echo "Spark cluster is already running"
+        echo "Error running batch pipeline. Check the output above."
     fi
+}
 
-    # Check if data exists in GCS bucket
-    echo "Checking for data in GCS..."
-    if [[ -z "$GOOGLE_APPLICATION_CREDENTIALS" ]]; then
-        echo "GOOGLE_APPLICATION_CREDENTIALS not set. Using default path: ./gcp-creds.json"
-        export GOOGLE_APPLICATION_CREDENTIALS="./gcp-creds.json"
-    fi
-
-    # Run the Spark transformation pipeline
-    echo "Running Spark transformation pipeline..."
-    cd batch_pipeline/export_to_gcs
-    python pipeline.py
-    if [ $? -ne 0 ]; then
-        echo "Failed to run Spark transformation pipeline. Check logs for errors."
-        cd ../..
-        return 1
-    fi
-    cd ../..
-
-    # Trigger Airflow DAG for batch processing
-    echo "Triggering batch data pipeline in Airflow..."
-    curl -X POST "http://localhost:8080/api/v1/dags/batch_data_pipeline/dagRuns" \
-    -H "Content-Type: application/json" \
-    -H "Authorization: Basic $(echo -n 'airflow:airflow' | base64)" \
-    -d '{"conf": {}}' || echo "Airflow API may not be ready yet. Please trigger the DAG manually from the Airflow UI."
-
-    # Run the BigQuery export pipeline
-    echo "Running BigQuery export pipeline..."
-    cd batch_pipeline/export_to_big_query
-
-    # Export dimension tables
-    for dim in farm crop weather soil harvest; do
-        echo "Exporting $dim dimension to BigQuery..."
-        python data_exporters/${dim}_dim_to_big_query.py
-        if [ $? -ne 0 ]; then
-            echo "Failed to export $dim dimension. Continuing with other exports..."
-        fi
-    done
-
-    # Export fact tables
-    for fact in production yield sustainability; do
-        echo "Exporting $fact facts to BigQuery..."
-        python data_exporters/${fact}_facts_to_big_query.py
-        if [ $? -ne 0 ]; then
-            echo "Failed to export $fact facts. Continuing with other exports..."
-        fi
-    done
-
-    cd ../..
-
-    echo "Agricultural Data Batch Pipeline completed successfully!"
+# Function to run the full pipeline
+run_pipeline() {
+    section "Running Full Pipeline"
     
-    # Run the OLAP transformation pipeline as a final step
-    olap-transformation-pipeline
-}
-
-gitting(){
-    git add .
-    sleep 2
-    git commit -m "Update from Local"
-    sleep 2
-    git push -u origin main
-}
-
-terraform-start(){
-    terraform -chdir=terraform init
-    terraform -chdir=terraform plan
-    terraform -chdir=terraform apply
-}
-terraform-destroy(){
-    terraform -chdir=terraform destroy
-}
-
-start-project(){
-    echo "Checking port availability for all services..."
-    # Check all required ports
-    check_port 8080 && check_port 9092 && check_port 2181 && check_port 8081 && check_port 9021 && \
-    check_port 8082 && check_port 5432 && check_port 5050 && check_port 3000 && \
-    check_port 8090 && check_port 8091 && check_port 7077 && check_port 8888
-    if [ $? -ne 0 ]; then
-        echo "Please resolve port conflicts before starting the project."
-        return 1
-    fi
+    # Install dependencies if needed
+    install_dependencies
     
-    echo "Creating Resources in Bigquery..."
-    sleep 3
-    terraform-start
-    echo "Resources created, starting the streaming pipeline..."
-    start-streaming-pipeline
-    if [ $? -ne 0 ]; then
-        echo "Failed to start streaming pipeline."
-        return 1
-    fi
-    echo "Check the Airflow UI at http://localhost:8080 to monitor your DAGs"
-    sleep 10
-    echo "Waiting 2 mins to get some data, till then check Airflow UI."
-    sleep 120
-    echo "Starting Batch pipeline..."
-    start-spark
-    if [ $? -ne 0 ]; then
-        echo "Failed to start Spark."
-        return 1
-    fi
-    start-batch-pipeline
+    # Start streaming
+    start_streaming
+    
+    # Wait for some data to be collected
+    echo "Waiting for data collection (30 seconds)..."
     sleep 30
-    echo "Batch pipeline execution complete,starting dbt pipeline..."
-    dbt run
-    echo "dbt pipeline execution complete, your data is ready in Bigquery for downstream usecases."
-    echo "Start making dashboard in metabase"
-    start-metabase
+    
+    # Run batch pipeline
+    run_batch_pipeline
+    
+    # Stop streaming
+    stop_streaming
+    
+    echo "Full pipeline execution completed!"
 }
 
-stop-all-services(){
-    stop-airflow
-    stop-kafka
-    stop-spark
-    stop-metabase
+# Function to clean up all processes
+cleanup() {
+    section "Cleaning Up"
+    
+    # Stop streaming
+    stop_streaming
+    
+    echo "Cleanup completed."
 }
+
+# Display available commands
+show_help() {
+    section "Agricultural Data Pipeline Commands"
+    echo 
+    echo "Available commands:"
+    echo "  setup_environment   - Set up the environment and install dependencies"
+    echo "  install_dependencies - Install Python dependencies"
+    echo "  start_producer      - Start the Kafka producer"
+    echo "  start_consumer      - Start the Kafka consumer"
+    echo "  start_streaming     - Start both producer and consumer"
+    echo "  stop_streaming      - Stop the streaming pipeline"
+    echo "  run_batch_pipeline  - Run the batch ETL pipeline"
+    echo "  run_pipeline        - Run the full pipeline (streaming + batch)"
+    echo "  cleanup             - Clean up all processes"
+    echo 
+    echo "Example: source commands.sh && setup_environment && run_pipeline"
+}
+
+# Show help by default when the script is sourced
+show_help
+
+echo "Agricultural Data Pipeline commands loaded."
+echo "Type 'help' to see available commands."
+
+# Define help command
+help() {
+    show_help
+}
+
+# Export all functions
+export -f section
+export -f command_exists
+export -f install_dependencies
+export -f check_kafka
+export -f setup_environment
+export -f start_producer
+export -f start_consumer
+export -f start_streaming
+export -f stop_streaming
+export -f run_batch_pipeline
+export -f run_pipeline
+export -f cleanup
+export -f show_help
+export -f help

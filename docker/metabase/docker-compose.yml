@@ -1,29 +1,43 @@
-version: '3'
+version: '3.6'
 networks:
   default:
     name: ${PROJECT_NAME}-network
     external: true
+
 services:
   metabase:
     image: metabase/metabase:latest
     container_name: ${PROJECT_NAME}-metabase
-    env_file:
-      - .env
-    ports:
-      - ${METABASE_PORT:-3000}:3000
+    volumes:
+      - metabase-data:/metabase-data
     environment:
       MB_DB_TYPE: postgres
-      MB_DB_DBNAME: ${POSTGRES_DBNAME:-metabase}
+      MB_DB_DBNAME: metabase
       MB_DB_PORT: 5432
-      MB_DB_USER: ${POSTGRES_USER:-postgres}
-      MB_DB_PASS: ${POSTGRES_PASSWORD:-postgres}
+      MB_DB_USER: ${POSTGRES_USER}
+      MB_DB_PASS: ${POSTGRES_PASSWORD}
       MB_DB_HOST: postgres
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 40s
+      JAVA_TIMEZONE: UTC
+    ports:
+      - "${METABASE_PORT}:3000"
     depends_on:
-      postgres:
-        condition: service_healthy
+      - postgres
+
+  postgres:
+    image: postgres:13
+    container_name: ${PROJECT_NAME}-metabase-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: metabase
+    volumes:
+      - metabase-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  metabase-data:
+  metabase-postgres-data:

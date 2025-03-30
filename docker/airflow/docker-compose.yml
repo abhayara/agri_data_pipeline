@@ -1,189 +1,92 @@
 version: '3'
-x-airflow-common:
-  &airflow-common
-  image: ${AIRFLOW_IMAGE_NAME:-airflow:latest}
-  build:
-    context: .
-    dockerfile: Dockerfile
-  environment:
-    &airflow-common-env
-    AIRFLOW__CORE__EXECUTOR: LocalExecutor
-    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DBNAME}
-    # For backward compatibility, with Airflow <2.3
-    AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DBNAME}
-    AIRFLOW__CORE__FERNET_KEY: ''
-    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
-    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
-    AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'
-    # Kafka
-    KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
-    KAFKA_TOPIC: ${KAFKA_TOPIC:-agri_data}
-    KAFKA_GROUP_ID: ${KAFKA_GROUP_ID:-agri_data_consumer}
-    KAFKA_AUTO_OFFSET_RESET: ${KAFKA_AUTO_OFFSET_RESET:-earliest}
-    SCHEMA_REGISTRY_HOST_NAME: ${SCHEMA_REGISTRY_HOST_NAME:-schema-registry}
-    SCHEMA_REGISTRY_PORT: ${SCHEMA_REGISTRY_PORT:-8081}
-    # GCS
-    GCS_BUCKET_NAME: ${GCS_BUCKET_NAME:-agri_data_bucket}
-    GCS_TEMP_BLOB_PATH: ${GCS_TEMP_BLOB_PATH:-raw/agri_data/}
-    GCS_RAW_DATA_PATH: ${GCS_RAW_DATA_PATH:-raw/agri_data/}
-    # Dimension Tables
-    DIMENSION_TABLES: ${DIMENSION_TABLES:-farm,crop,weather,soil,harvest}
-    FACT_TABLES: ${FACT_TABLES:-farm_activity,yield}
-    # GCP
-    GCP_PROJECT_ID: ${GCP_PROJECT_ID:-agri-data-454414}
-    GCP_DATASET_ID: ${GCP_DATASET_ID:-agri_data}
-    GOOGLE_APPLICATION_CREDENTIALS: /opt/airflow/gcp-creds.json
-    # Batch Processing
-    BATCH_SCRIPTS_PATH: ${BATCH_SCRIPTS_PATH:-/opt/airflow/dags/scripts/batch/}
-    # Spark
-    SPARK_MAIN_APP: ${SPARK_MAIN_APP:-/opt/airflow/dags/scripts/batch/transform_raw_data.py}
-  volumes:
-    - ./dags:/opt/airflow/dags
-    - ./logs:/opt/airflow/logs
-    - ./plugins:/opt/airflow/plugins
-    - ./config:/opt/airflow/config
-    - ./data:/opt/airflow/data
-    - ../gcp-creds.json:/opt/airflow/gcp-creds.json
-  user: "${AIRFLOW_UID:-50000}:0"
-  depends_on:
-    postgres:
-      condition: service_healthy
-    kafka:
-      condition: service_healthy
 
 services:
   postgres:
     image: postgres:13
+    container_name: ${PROJECT_NAME}-airflow-postgres
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-airflow}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-airflow}
-      POSTGRES_DB: ${POSTGRES_DBNAME:-airflow}
+      - POSTGRES_USER=${AIRFLOW_DB_USER}
+      - POSTGRES_PASSWORD=${AIRFLOW_DB_PASSWORD}
+      - POSTGRES_DB=${AIRFLOW_DB_NAME}
     volumes:
       - postgres-db-volume:/var/lib/postgresql/data
     ports:
-      - 5432:5432
+      - "${AIRFLOW_DB_PORT}:5432"
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER:-airflow}"]
-      interval: 10s
-      timeout: 5s
+      test: ["CMD", "pg_isready", "-U", "${AIRFLOW_DB_USER}"]
+      interval: 5s
       retries: 5
-      start_period: 10s
-
-  kafka:
-    image: confluentinc/cp-kafka:7.3.0
-    hostname: kafka
-    container_name: kafka
-    ports:
-      - "9092:9092"
-      - "29092:29092"
-    environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-      KAFKA_JMX_PORT: 9997
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
-      KAFKA_LOG_RETENTION_HOURS: 24
-      KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: 300000
-      KAFKA_LOG_RETENTION_BYTES: 1073741824
-    depends_on:
-      zookeeper:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "kafka-topics", "--bootstrap-server", "kafka:9092", "--list"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
-
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.3.0
-    hostname: zookeeper
-    container_name: zookeeper
-    ports:
-      - "2181:2181"
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
-    healthcheck:
-      test: ["CMD", "bash", "-c", "echo ruok | nc localhost 2181 | grep imok"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-
-  schema-registry:
-    image: confluentinc/cp-schema-registry:7.3.0
-    hostname: schema-registry
-    container_name: schema-registry
-    ports:
-      - "8081:8081"
-    environment:
-      SCHEMA_REGISTRY_HOST_NAME: schema-registry
-      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: 'kafka:9092'
-    depends_on:
-      kafka:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8081/subjects"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
-
+    restart: always
+    networks:
+      - ${PROJECT_NAME}-network
+    
   airflow-webserver:
-    <<: *airflow-common
-    command: webserver
-    ports:
-      - 8080:8080
+    image: apache/airflow:2.7.3
+    container_name: ${PROJECT_NAME}-airflow-webserver
     depends_on:
-      postgres:
-        condition: service_healthy
-      airflow-init:
-        condition: service_completed_successfully
-      kafka:
-        condition: service_healthy
-      schema-registry:
-        condition: service_healthy
+      - postgres
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASSWORD}@postgres/${AIRFLOW_DB_NAME}
+      - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW__CORE__FERNET_KEY}
+      - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      - AIRFLOW_HOME=/opt/airflow
+      - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW__WEBSERVER__SECRET_KEY}
+      - _AIRFLOW_WWW_USER_USERNAME=${_AIRFLOW_WWW_USER_USERNAME}
+      - _AIRFLOW_WWW_USER_PASSWORD=${_AIRFLOW_WWW_USER_PASSWORD}
+      - GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/gcp-creds.json
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./plugins:/opt/airflow/plugins
+      - ./config:/opt/airflow/config
+      - ../..:/opt/airflow/project
+      - ../../gcp-creds.json:/opt/airflow/gcp-creds.json
+    ports:
+      - "${AIRFLOW_PORT}:8080"
+    command: >
+      bash -c "airflow db init && 
+      airflow users create -r Admin -u $${_AIRFLOW_WWW_USER_USERNAME} -p $${_AIRFLOW_WWW_USER_PASSWORD} -e admin@example.com -f admin -l user && 
+      airflow webserver"
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
-      interval: 30s
+      interval: 10s
       timeout: 10s
       retries: 5
-      start_period: 30s
+    restart: always
+    networks:
+      - ${PROJECT_NAME}-network
 
   airflow-scheduler:
-    <<: *airflow-common
-    command: scheduler
+    image: apache/airflow:2.7.3
+    container_name: ${PROJECT_NAME}-airflow-scheduler
     depends_on:
-      postgres:
-        condition: service_healthy
-      airflow-init:
-        condition: service_completed_successfully
-      kafka:
-        condition: service_healthy
-      schema-registry:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
-
-  airflow-init:
-    <<: *airflow-common
-    command: version
+      - airflow-webserver
     environment:
-      <<: *airflow-common-env
-      _AIRFLOW_DB_UPGRADE: 'true'
-      _AIRFLOW_WWW_USER_CREATE: 'true'
-      _AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_USER:-airflow}
-      _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_PASSWORD:-airflow}
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASSWORD}@postgres/${AIRFLOW_DB_NAME}
+      - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW__CORE__FERNET_KEY}
+      - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      - AIRFLOW_HOME=/opt/airflow
+      - GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/gcp-creds.json
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./plugins:/opt/airflow/plugins
+      - ./config:/opt/airflow/config
+      - ../..:/opt/airflow/project
+      - ../../gcp-creds.json:/opt/airflow/gcp-creds.json
+    command: scheduler
+    restart: always
+    networks:
+      - ${PROJECT_NAME}-network
+
+networks:
+  ${PROJECT_NAME}-network:
+    external: true
+    name: ${PROJECT_NAME}-network
 
 volumes:
-  postgres-db-volume:
+  postgres-db-volume: 
