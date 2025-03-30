@@ -5,7 +5,7 @@ variable "location" {
 
 variable "bq_dataset_name"{
     description = "Bigquery Dataset name"
-    default = "agri_bigquery"  # Change this
+    default = "agri_data"  # Change this
 }
 
 variable "gcs_storage_class" {
