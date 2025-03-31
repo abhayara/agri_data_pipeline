@@ -1,5 +1,3 @@
-version: '3'
-
 services:
   postgres:
     image: postgres:13
@@ -10,83 +8,63 @@ services:
       - POSTGRES_DB=${AIRFLOW_DB_NAME}
     volumes:
       - postgres-db-volume:/var/lib/postgresql/data
-    ports:
-      - "${AIRFLOW_DB_PORT}:5432"
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "${AIRFLOW_DB_USER}"]
       interval: 5s
       retries: 5
     restart: always
-    networks:
-      - ${PROJECT_NAME}-network
-    
+    ports:
+      - "${AIRFLOW_DB_PORT}:5432"
+
   airflow-webserver:
     image: apache/airflow:2.7.3
     container_name: ${PROJECT_NAME}-airflow-webserver
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASSWORD}@postgres/${AIRFLOW_DB_NAME}
       - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW__CORE__FERNET_KEY}
-      - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true
-      - AIRFLOW__CORE__LOAD_EXAMPLES=false
-      - AIRFLOW_HOME=/opt/airflow
       - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW__WEBSERVER__SECRET_KEY}
-      - _AIRFLOW_WWW_USER_USERNAME=${_AIRFLOW_WWW_USER_USERNAME}
-      - _AIRFLOW_WWW_USER_PASSWORD=${_AIRFLOW_WWW_USER_PASSWORD}
-      - GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/gcp-creds.json
+      - _AIRFLOW_WWW_USER_USERNAME=${_AIRFLOW_WWW_USER_USERNAME:-airflow}
+      - _AIRFLOW_WWW_USER_PASSWORD=${_AIRFLOW_WWW_USER_PASSWORD:-airflow}
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
     volumes:
       - ./dags:/opt/airflow/dags
       - ./logs:/opt/airflow/logs
       - ./plugins:/opt/airflow/plugins
       - ./config:/opt/airflow/config
-      - ../..:/opt/airflow/project
-      - ../../gcp-creds.json:/opt/airflow/gcp-creds.json
+      - ../../:/opt/airflow/project
     ports:
       - "${AIRFLOW_PORT}:8080"
-    command: >
-      bash -c "airflow db init && 
-      airflow users create -r Admin -u $${_AIRFLOW_WWW_USER_USERNAME} -p $${_AIRFLOW_WWW_USER_PASSWORD} -e admin@example.com -f admin -l user && 
-      airflow webserver"
+    command: bash -c "airflow db init && airflow users create --username $$_AIRFLOW_WWW_USER_USERNAME --firstname Airflow --lastname Admin --role Admin --email admin@example.com --password $$_AIRFLOW_WWW_USER_PASSWORD && airflow webserver"
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
       interval: 10s
       timeout: 10s
       retries: 5
     restart: always
-    networks:
-      - ${PROJECT_NAME}-network
 
   airflow-scheduler:
     image: apache/airflow:2.7.3
     container_name: ${PROJECT_NAME}-airflow-scheduler
     depends_on:
-      - airflow-webserver
+      postgres:
+        condition: service_healthy
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASSWORD}@postgres/${AIRFLOW_DB_NAME}
       - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW__CORE__FERNET_KEY}
-      - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true
-      - AIRFLOW__CORE__LOAD_EXAMPLES=false
-      - AIRFLOW_HOME=/opt/airflow
-      - GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/gcp-creds.json
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
     volumes:
       - ./dags:/opt/airflow/dags
       - ./logs:/opt/airflow/logs
       - ./plugins:/opt/airflow/plugins
       - ./config:/opt/airflow/config
-      - ../..:/opt/airflow/project
-      - ../../gcp-creds.json:/opt/airflow/gcp-creds.json
-    command: scheduler
+      - ../../:/opt/airflow/project
+    command: airflow scheduler
     restart: always
-    networks:
-      - ${PROJECT_NAME}-network
-
-networks:
-  ${PROJECT_NAME}-network:
-    external: true
-    name: ${PROJECT_NAME}-network
 
 volumes:
   postgres-db-volume: 

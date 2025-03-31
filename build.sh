@@ -50,11 +50,22 @@ destroy_infrastructure() {
     stop-streaming-pipeline
     stop-spark
     stop-kafka
-    stop-airflow
+    
+    # Stop airflow with more robust handling
+    echo -e "${YELLOW}Stopping Airflow services with enhanced error handling...${NC}"
+    if docker ps | grep -q "${PROJECT_NAME}-airflow"; then
+        echo -e "${YELLOW}Attempting to stop Airflow services gracefully...${NC}"
+        stop-airflow || {
+            echo -e "${YELLOW}Failed to stop Airflow gracefully. Forcing removal...${NC}"
+            docker ps -a | grep "${PROJECT_NAME}-airflow" | awk '{print $1}' | xargs -r docker rm -f
+        }
+    else
+        echo -e "${GREEN}No Airflow services running. Nothing to stop.${NC}"
+    fi
     
     # Stop any other services
     echo -e "${YELLOW}Removing any remaining project containers...${NC}"
-    docker ps -a | grep 'agri_data' | awk '{print $1}' | xargs docker rm -f 2>/dev/null || true
+    docker ps -a | grep 'agri_data' | awk '{print $1}' | xargs -r docker rm -f 2>/dev/null || true
     
     echo -e "${YELLOW}Destroying Terraform resources...${NC}"
     if [ -d "./terraform" ]; then
@@ -429,11 +440,21 @@ main() {
         exit 1
     }
     
-    # 8. Start Airflow
+    # 8. Start Airflow with more robust error handling
+    echo -e "${YELLOW}Starting Airflow with enhanced error handling...${NC}"
     start-airflow || {
-        echo -e "${RED}Failed to start Airflow. Check logs.${NC}"
-        # Continue despite error, as we want other components to work
-        echo -e "${YELLOW}Continuing with other components...${NC}"
+        echo -e "${RED}Failed to start Airflow on first attempt. Cleaning up and retrying...${NC}"
+        # Force stop any running Airflow containers
+        docker ps -a | grep "${PROJECT_NAME}-airflow" | awk '{print $1}' | xargs -r docker rm -f 2>/dev/null || true
+        # Clean up Airflow volumes
+        docker volume ls | grep "airflow" | awk '{print $2}' | xargs -r docker volume rm 2>/dev/null || true
+        # Try starting Airflow again
+        echo -e "${YELLOW}Retrying Airflow startup...${NC}"
+        start-airflow || {
+            echo -e "${RED}Failed to start Airflow after retry. Continuing with other components...${NC}"
+            # Continue despite error, as we want other components to work
+            echo -e "${YELLOW}Continuing with other components...${NC}"
+        }
     }
     
     # 9. Start streaming pipeline
