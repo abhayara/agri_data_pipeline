@@ -132,7 +132,7 @@ agri_data_pipeline/
 
 1. **Clone the repository:**
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/abhayra12/agri_data_pipeline
    cd agri_data_pipeline
    ```
 
@@ -193,6 +193,7 @@ agri_data_pipeline/
 5. **dbt Transformations:**
    - dbt models transform the data for specific business use cases
    - Tests ensure data quality and integrity
+   - dbt docs at http://localhost:8085
 
 6. **Visualization:**
    - Metabase dashboards provide insights into agricultural data
@@ -202,21 +203,7 @@ agri_data_pipeline/
 
 The Metabase dashboard includes:
 
-1. **Crop Yield Analysis**
-   - Bar chart showing yield by crop type
-   - Time series of yield trends over seasons
 
-2. **Weather Impact Visualization**
-   - Correlation between rainfall and crop performance
-   - Temperature effects on different crop varieties
-
-3. **Soil Health Monitoring**
-   - Nutrient levels by farm and field
-   - pH balance tracking over time
-
-4. **Farm Performance Comparison**
-   - Regional performance benchmarking
-   - Efficiency metrics by farm size
 
 ## Troubleshooting
 
