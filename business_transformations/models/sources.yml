@@ -1,0 +1,97 @@
+version: 2
+
+sources:
+  - name: agri_data
+    description: Agriculture data source
+    database: "{{ env_var('BQ_PROJECT') }}"
+    schema: "{{ env_var('BQ_DATASET') }}"
+    tables:
+      - name: raw_data
+        description: Raw data from the agricultural data pipeline
+        columns:
+          - name: Farm_ID
+            description: Unique identifier for the farm
+          - name: Farm_Type
+            description: Type of the farm (Crop, Livestock, Mixed, Horticulture)
+          - name: Farm_Size_Acres
+            description: Size of the farm in acres
+          - name: Farm_Location
+            description: Geographic coordinates of the farm
+          - name: Farmer_ID
+            description: Unique identifier for the farmer
+          - name: Farmer_Name
+            description: Name of the farmer
+          - name: Farmer_Contact
+            description: Contact information for the farmer
+          - name: Crop_ID
+            description: Unique identifier for the crop
+          - name: Crop_Type
+            description: Type of crop (Grain, Vegetable, Fruit, Fiber, Oilseed)
+          - name: Crop_Variety
+            description: Specific variety of the crop
+          - name: Planting_Date
+            description: Date when the crop was planted
+          - name: Harvest_Date
+            description: Date when the crop was harvested
+          - name: Expected_Yield
+            description: Expected yield for the crop
+          - name: Actual_Yield
+            description: Actual yield achieved for the crop
+          - name: Yield_Unit
+            description: Unit of measurement for the yield
+          - name: Soil_Type
+            description: Type of soil (Clay, Sandy, Loam, Silt, Peaty)
+          - name: Soil_pH
+            description: pH level of the soil
+          - name: Soil_Moisture
+            description: Moisture content of the soil
+          - name: Soil_Temperature
+            description: Temperature of the soil
+          - name: Soil_Fertility
+            description: Fertility rating of the soil
+          - name: Weather_Temperature
+            description: Temperature reading in degrees
+          - name: Weather_Humidity
+            description: Humidity percentage
+          - name: Weather_Rainfall
+            description: Rainfall measurement
+          - name: Weather_Sunlight
+            description: Hours of sunlight
+          - name: Irrigation_Method
+            description: Method of irrigation used
+          - name: Irrigation_Amount
+            description: Amount of irrigation applied
+          - name: Fertilizer_Type
+            description: Type of fertilizer used
+          - name: Fertilizer_Amount
+            description: Amount of fertilizer applied
+          - name: Pesticide_Type
+            description: Type of pesticide used
+          - name: Pesticide_Amount
+            description: Amount of pesticide applied
+          - name: Equipment_Used
+            description: Equipment used in production
+          - name: Labor_Hours
+            description: Labor hours spent on production
+          - name: Production_Cost
+            description: Cost of production
+          - name: Market_Price
+            description: Market price of the crop
+          - name: Total_Revenue
+            description: Total revenue generated
+          - name: Profit_Margin
+            description: Profit margin percentage
+          - name: Quality_Grade
+            description: Quality grade of the harvested crop
+          - name: Certification
+            description: Certification status
+          - name: Carbon_Footprint
+            description: Carbon footprint measurement
+          - name: Water_Footprint
+            description: Water footprint measurement
+          - name: Sustainability_Score
+            description: Overall sustainability score
+          - name: timestamp
+            description: Timestamp of the record
+          - name: created_at
+            description: Timestamp when the record was created 

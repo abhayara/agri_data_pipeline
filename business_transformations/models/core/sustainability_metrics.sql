@@ -1,53 +1,92 @@
-with farm_data as (
+with farm_dim as (
     select * from {{ ref('stg_farm') }}
 ),
 
-sustainability_data as (
+sustainability_facts as (
     select * from {{ ref('stg_sustainability') }}
 ),
 
-production_data as (
+production_facts as (
     select * from {{ ref('stg_production') }}
 ),
 
+-- Calculate water efficiency
 water_efficiency as (
     select
         s.farm_id,
-        avg(s.water_usage / nullif(p.quantity_produced, 0)) as water_usage_per_unit,
-        (10 - least(avg(s.water_usage / nullif(p.quantity_produced, 0)) * 2, 10)) as water_efficiency_score
-    from sustainability_data s
-    left join production_data p on s.farm_id = p.farm_id and s.date = p.date
+        -- Lower water footprint is better for efficiency
+        case 
+            when avg(s.water_footprint) > 0 
+            then 10 - (avg(s.water_footprint) / 500) -- Normalize to 0-10 scale (lower is better)
+            else 10
+        end as water_efficiency_score
+    from sustainability_facts s
     group by 1
 ),
 
+-- Calculate carbon efficiency
 carbon_efficiency as (
     select
         s.farm_id,
-        avg(s.carbon_footprint / nullif(p.quantity_produced, 0)) as carbon_footprint_per_unit,
-        (10 - least(avg(s.carbon_footprint / nullif(p.quantity_produced, 0)) * 2, 10)) as carbon_efficiency_score
-    from sustainability_data s
-    left join production_data p on s.farm_id = p.farm_id and s.date = p.date
+        -- Lower carbon footprint is better for efficiency
+        case 
+            when avg(s.carbon_footprint) > 0 
+            then 10 - (avg(s.carbon_footprint) / 100) -- Normalize to 0-10 scale (lower is better)
+            else 10 
+        end as carbon_efficiency_score
+    from sustainability_facts s
     group by 1
 ),
 
+-- Calculate pesticide efficiency
 pesticide_efficiency as (
     select
-        s.farm_id,
-        avg(s.pesticide_usage / nullif(p.quantity_produced, 0)) as pesticide_usage_per_unit,
-        (10 - least(avg(s.pesticide_usage / nullif(p.quantity_produced, 0)) * 3, 10)) as pesticide_efficiency_score
-    from sustainability_data s
-    left join production_data p on s.farm_id = p.farm_id and s.date = p.date
+        p.farm_id,
+        -- Lower pesticide amount or organic types are better
+        case
+            when p.pesticide_type = 'None' then 10
+            when p.pesticide_type = 'Organic' then 8
+            when p.pesticide_type = 'Mixed' then 5
+            when p.pesticide_type = 'Chemical' and p.pesticide_amount < 10 then 3
+            when p.pesticide_type = 'Chemical' and p.pesticide_amount >= 10 then 1
+            else 5
+        end as pesticide_score
+    from production_facts p
+),
+
+avg_pesticide_efficiency as (
+    select
+        farm_id,
+        avg(pesticide_score) as pesticide_efficiency_score
+    from pesticide_efficiency
     group by 1
 )
 
 select
     f.farm_id,
     f.farm_name,
-    we.water_efficiency_score,
-    ce.carbon_efficiency_score,
-    pe.pesticide_efficiency_score,
-    (we.water_efficiency_score + ce.carbon_efficiency_score + pe.pesticide_efficiency_score) / 3 as overall_sustainability_score
-from farm_data f
-left join water_efficiency we on f.farm_id = we.farm_id
-left join carbon_efficiency ce on f.farm_id = ce.farm_id
-left join pesticide_efficiency pe on f.farm_id = pe.farm_id 
+    f.farm_type,
+    f.farm_size_acres,
+    w.water_efficiency_score,
+    c.carbon_efficiency_score,
+    p.pesticide_efficiency_score,
+    (w.water_efficiency_score * 0.4 + 
+     c.carbon_efficiency_score * 0.4 + 
+     p.pesticide_efficiency_score * 0.2) as overall_sustainability_score,
+    case
+        when (w.water_efficiency_score * 0.4 + 
+             c.carbon_efficiency_score * 0.4 + 
+             p.pesticide_efficiency_score * 0.2) >= 8 then 'Excellent'
+        when (w.water_efficiency_score * 0.4 + 
+             c.carbon_efficiency_score * 0.4 + 
+             p.pesticide_efficiency_score * 0.2) >= 6 then 'Good'
+        when (w.water_efficiency_score * 0.4 + 
+             c.carbon_efficiency_score * 0.4 + 
+             p.pesticide_efficiency_score * 0.2) >= 4 then 'Average'
+        else 'Needs Improvement'
+    end as sustainability_rating,
+    current_timestamp() as updated_at
+from farm_dim f
+left join water_efficiency w on f.farm_id = w.farm_id
+left join carbon_efficiency c on f.farm_id = c.farm_id
+left join avg_pesticide_efficiency p on f.farm_id = p.farm_id 
