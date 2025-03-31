@@ -1,73 +1,88 @@
-with crop_data as (
+with crop_dim as (
     select * from {{ ref('stg_crop') }}
 ),
 
-production_data as (
-    select * from {{ ref('stg_production') }}
-),
-
-yield_data as (
+yield_facts as (
     select * from {{ ref('stg_yield') }}
 ),
 
-current_year_production as (
-    select
-        crop_id,
-        sum(quantity_produced) as total_production
-    from production_data
-    where extract(year from date) = extract(year from current_date())
-    group by 1
-),
-
-previous_year_production as (
-    select
-        crop_id,
-        sum(quantity_produced) as total_production
-    from production_data
-    where extract(year from date) = extract(year from current_date()) - 1
-    group by 1
+production_facts as (
+    select * from {{ ref('stg_production') }}
 ),
 
 crop_yield as (
     select
-        crop_id,
-        avg(yield_per_hectare) as average_yield
-    from yield_data
+        c.crop_id,
+        c.crop_type,
+        c.crop_variety,
+        avg(y.actual_yield) as average_yield,
+        sum(y.actual_yield) as total_production,
+        avg(y.yield_ratio) as yield_efficiency
+    from crop_dim c
+    left join yield_facts y on c.crop_id = y.crop_id
+    group by 1, 2, 3
+),
+
+crop_economics as (
+    select
+        c.crop_id,
+        avg(p.market_price) as avg_market_price,
+        sum(p.total_revenue) as total_revenue,
+        avg(p.profit_margin) as avg_profit_margin
+    from crop_dim c
+    left join production_facts p on c.crop_id = p.crop_id
     group by 1
 ),
 
-crop_cost as (
+-- Calculate year-over-year growth using window functions
+crop_growth as (
     select
         crop_id,
-        sum(cost) as total_cost
-    from production_data
-    group by 1
+        extract(year from harvest_date) as harvest_year,
+        sum(actual_yield) as yearly_production
+    from yield_facts
+    where harvest_date is not null
+    group by 1, 2
 ),
 
-crop_production as (
+crop_growth_rate as (
     select
         crop_id,
-        sum(quantity_produced) as total_production
-    from production_data
+        harvest_year,
+        yearly_production,
+        lag(yearly_production) over (partition by crop_id order by harvest_year) as prev_year_production,
+        case
+            when lag(yearly_production) over (partition by crop_id order by harvest_year) is not null
+            and lag(yearly_production) over (partition by crop_id order by harvest_year) != 0
+            then (yearly_production - lag(yearly_production) over (partition by crop_id order by harvest_year)) / 
+                 lag(yearly_production) over (partition by crop_id order by harvest_year) * 100
+            else 0
+        end as growth_rate
+    from crop_growth
+),
+
+crop_avg_growth as (
+    select
+        crop_id,
+        avg(growth_rate) as avg_growth_rate
+    from crop_growth_rate
     group by 1
 )
 
 select
     c.crop_id,
-    c.crop_name,
-    cp.total_production,
-    cyd.average_yield,
-    case
-        when py.total_production is null or py.total_production = 0 then 0
-        else (cyp.total_production - py.total_production) / py.total_production * 100
-    end as growth_rate,
-    case
-        when cc.total_cost = 0 then 0
-        else cp.total_production / nullif(cc.total_cost, 0)
-    end as profitability_index
-from crop_data c
-left join crop_production cp on c.crop_id = cp.crop_id
-left join crop_yield cyd on c.crop_id = cyd.crop_id
-left join current_year_production cyp on c.crop_id = cyp.crop_id
-left join previous_year_production py on c.crop_id = py.crop_id
-left join crop_cost cc on c.crop_id = cc.crop_id 
+    c.crop_type,
+    c.crop_variety as crop_name,
+    cy.average_yield,
+    cy.total_production,
+    cy.yield_efficiency,
+    ce.avg_market_price,
+    ce.total_revenue,
+    ce.avg_profit_margin,
+    coalesce(cg.avg_growth_rate, 0) as growth_rate,
+    (ce.avg_profit_margin * cy.yield_efficiency) as profitability_index,
+    current_timestamp() as updated_at
+from crop_dim c
+left join crop_yield cy on c.crop_id = cy.crop_id
+left join crop_economics ce on c.crop_id = ce.crop_id
+left join crop_avg_growth cg on c.crop_id = cg.crop_id 
