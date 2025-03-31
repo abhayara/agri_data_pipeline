@@ -42,7 +42,7 @@ def export_gcs_to_bigquery(**kwargs):
         except Exception:
             logger.info(f"Creating dataset {dataset_id}")
             dataset = bigquery.Dataset(dataset_ref)
-            dataset.location = "US"
+            dataset.location = "asia-south1"
             bigquery_client.create_dataset(dataset)
         
         # Process each file

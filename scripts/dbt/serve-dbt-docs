@@ -1,0 +1,15 @@
+#!/bin/bash
+# Script to generate and serve DBT documentation
+
+# Set PROJECT_ROOT to the project root directory
+export PROJECT_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+echo "Project root: $PROJECT_ROOT"
+
+# Source the functions file
+source "$PROJECT_ROOT/scripts/dbt/functions.sh"
+
+# Run the serve-dbt-docs function
+echo "Starting to serve DBT documentation..."
+serve-dbt-docs
+
+exit $? 

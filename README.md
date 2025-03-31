@@ -1,141 +1,126 @@
 # Agricultural Data Pipeline
 
-This project provides a robust data pipeline for agricultural data processing using Kafka, Spark, and Google Cloud Storage with visualization in Metabase.
+## Problem Statement
 
-## Quick Start
+This project addresses the challenges of collecting, processing, and analyzing agricultural data at scale. The agricultural sector generates massive amounts of data from various sources including weather stations, soil sensors, farm equipment, and satellite imagery. However, this data is often siloed, inconsistently formatted, and difficult to analyze in real-time.
 
-To quickly set up and run the entire pipeline:
+Our solution is an end-to-end data pipeline that:
+1. Collects agricultural data in real-time
+2. Processes and standardizes the data
+3. Stores it in a scalable data warehouse
+4. Transforms it for analytical use cases
+5. Visualizes key agricultural metrics for decision making
 
-```bash
-# Clone the repository (if you haven't already)
-git clone <repository-url>
-cd agri_data_pipeline
+## Project Architecture
 
-# Make sure the rebuild script is executable
-chmod +x rebuild.sh
+![Agricultural Pipeline Architecture](images/agri_pipeline_architecture.png)
 
-# Run the automated setup script
-./rebuild.sh
+```
++----------------+      +----------------+      +-------------------+
+| Data Sources   |      | Streaming      |      | Storage           |
+| -------------- | ---> | Pipeline       | ---> | --------------    |
+| Agri Data Gen  |      | Kafka          |      | Google Cloud      |
++----------------+      +----------------+      | Storage (GCS)     |
+                                                +-------------------+
+                                                         |
+                                                         v
++----------------+      +----------------+      +-------------------+
+| Visualization  |      | Transformation |      | Batch Processing  |
+| -------------- | <--- | -------------- | <--- | --------------    |
+| Metabase       |      | dbt            |      | Apache Spark      |
++----------------+      +----------------+      +-------------------+
+                                |
+                                v
+                        +-------------------+
+                        | Data Warehouse    |
+                        | --------------    |
+                        | BigQuery          |
+                        +-------------------+
+                                |
+                                v
+                        +-------------------+
+                        | Orchestration     |
+                        | --------------    |
+                        | Apache Airflow    |
+                        +-------------------+
 ```
 
-The rebuild script will:
-1. Check your environment for dependencies
-2. Stop any running services
-3. Update configurations for better network compatibility
-4. Rebuild and restart all services with proper settings
-5. Create Git checkpoints along the way
+*Note: To generate a proper architecture diagram, you can use tools like draw.io, Mermaid, or Lucidchart using the structure provided above.*
 
-## Service Ports
+### Directory Structure
 
-| Service | Port | Description |
-|---------|------|-------------|
-| Kafka Broker | 9092 | Kafka message broker |
-| Schema Registry | 8081 | Confluent Schema Registry |
-| Zookeeper | 2181 | Zookeeper service |
-| Kafka Control Center | 9021 | Confluent Control Center UI |
-| Kafka REST Proxy | 8082 | Kafka REST interface |
-| PostgreSQL | 5432 | Main PostgreSQL database |
-| PGAdmin | 5050 | PostgreSQL admin interface |
-| Airflow DB | 5433 | Airflow PostgreSQL database |
-| Airflow Webserver | 8080 | Airflow UI and API |
-| Spark Master UI | 8088 | Spark master web interface |
-| Spark Worker UI | 8089 | Spark worker web interface |
-| JupyterLab | 8890 | Jupyter notebook interface |
-| Metabase | 3010 | Metabase analytics dashboard |
-| DBT Docs | 8085 | DBT documentation server |
-
-## Manual Setup and Commands
-
-For more granular control, you can source the `commands.sh` file and use individual commands:
-
-```bash
-# Source the commands
-source commands.sh
-
-# See available commands
-help
-
-# Check environment
-check-environment
-
-# Start individual services
-start-kafka
-start-spark
-start-postgres
-start-metabase
-
-# Start the streaming pipeline
-start-streaming-pipeline
-
-# Check status
-status
+```
+agri_data_pipeline/
+├── batch_pipeline/             # Batch processing using Spark
+│   ├── export_to_big_query/    # Scripts to load data to BigQuery
+│   ├── export_to_gcs/          # Scripts to export processed data to GCS
+│   ├── processed_data/         # Output from batch processing
+│   └── jars/                   # Dependencies for Spark
+├── business_transformations/   # Business logic and transformations
+├── docker/                     # Docker configurations
+├── logs/                       # Application logs
+├── scripts/                    # Utility scripts
+│   ├── dbt/                    # dbt scripts for data transformations
+│   └── ...
+├── streaming_pipeline/         # Streaming data processing
+│   ├── data_producer.py        # Kafka producer for streaming data
+│   ├── data_consumer.py        # Kafka consumer
+│   └── kafka_to_gcs_dag.py     # Airflow DAG for Kafka to GCS
+├── terraform/                  # Infrastructure as Code
+├── .env                        # Environment variables
+├── .env.example                # Example environment file
+├── build.sh                    # Build script
+├── requirements.txt            # Python dependencies
+└── README.md                   # Project documentation
 ```
 
-## Architecture
+## Technologies Used
 
-The pipeline consists of the following components:
+### Cloud
+- **Google Cloud Platform (GCP)**
+  - Google Cloud Storage (GCS) for data lake
+  - BigQuery for data warehouse
+  - Compute Engine for hosting services
+- **Infrastructure as Code**
+  - Terraform for provisioning cloud resources
 
-- **Kafka**: Real-time data streaming platform
-- **Spark**: Distributed data processing
-- **PostgreSQL**: Relational database for structured data
-- **Metabase**: Data visualization and exploration
-- **Google Cloud Storage**: Cloud storage for processed data
+### Data Ingestion
+- **Streaming Pipeline**
+  - Apache Kafka for real-time data streaming
+  - Confluent Schema Registry for schema management
+  - Custom Kafka producers and consumers
+- **Workflow Orchestration**
+  - Apache Airflow for scheduling and monitoring workflows
+  - DAGs for both streaming and batch pipelines
 
-## Configuration and Customization
+### Data Warehouse
+- **BigQuery**
+  - Partitioned tables by date for optimized query performance
+  - Clustered by farm_id and crop_type to improve analytical queries
+  - Separate OLAP tables for business intelligence
 
-- Configuration is managed through the `.env` file
-- GCS is configured to use the `asia-south1` region
-- Kafka broker settings are automatically optimized for container networking
+### Transformations
+- **dbt (data build tool)**
+  - Models for transforming raw data into analytics-ready datasets
+  - Tests to ensure data quality
+  - Documentation for data lineage
 
-## Troubleshooting
+![dbt Lineage Diagram](images/agri_dbt_lineage.png)
 
-If you encounter any issues:
+- **Apache Spark**
+  - Data cleansing and normalization
+  - Feature engineering for agricultural metrics
 
-1. Check the status of services with the `status` command
-2. Inspect logs with `docker logs <container-name>`
-3. Restart problematic services with the corresponding `restart-*` commands
-4. For complete reset, use `rebuild-and-restart-all`
+### Dashboard
+- **Metabase**
+  - Interactive dashboards for agricultural insights
+  - Charts showing crop yield predictions
+  - Visualizations of weather impact on crop performance
+  - Time series analysis of soil conditions
 
-## Automated Git Checkpoints
-
-The pipeline automatically creates Git checkpoints at critical stages:
-- After environment configuration
-- When Kafka configuration is updated
-- After all services are successfully started
-
-This allows you to roll back to a known good state if needed.
-
-## Notes
-
-- Broker IP addresses are automatically detected and configured
-- All GCS storage is in the Asia South 1 region
-- Kafka connection issues are automatically resolved
-
-## Project Overview
-
-The pipeline has the following components:
-
-1. **Data Generation** - Synthetic agricultural data generation with fields including farm information, crop data, weather metrics, soil properties, and more.
-2. **Streaming Pipeline** - Real-time data processing using Kafka and Airflow.
-3. **Batch Processing** - OLAP transformations using Apache Spark.
-4. **Data Warehouse Integration** - Loading processed data to BigQuery using Airflow DAGs.
-5. **Analytics** - Transformation of data using dbt for business intelligence.
-6. **Visualization** - Dashboard creation using Metabase.
-
-## Architecture
-
-- **Streaming Layer**: Kafka, Confluent, Zookeeper
-- **Data Processing**: Apache Spark
-- **Orchestration**: Apache Airflow
-- **Storage**: Google Cloud Storage (GCS)
-- **Data Warehouse**: Google BigQuery
-- **Transformation**: dbt (data build tool)
-- **Visualization**: Metabase
-
-## Setup
+## Setup Instructions
 
 ### Prerequisites
-
 - Docker and Docker Compose
 - Google Cloud Platform account and project
 - Python 3.8+ with pip
@@ -143,216 +128,127 @@ The pipeline has the following components:
 - Network connectivity to download Docker images
 - At least 8GB of RAM available for Docker
 
-### Step-by-Step Setup Instructions
+### Step-by-Step Setup
 
-1. Clone the repository:
-   ```
+1. **Clone the repository:**
+   ```bash
    git clone <repository-url>
    cd agri_data_pipeline
    ```
 
-2. Install required Python packages:
-   ```
-   pip install -r requirements.txt
-   ```
-
-3. Prepare GCP credentials:
-   - Create a service account in GCP with the following permissions:
-     - BigQuery Admin
-     - Storage Admin
-     - Dataflow Admin
+2. **Set up GCP credentials:**
+   - Create a service account with BigQuery Admin, Storage Admin, and Dataflow Admin permissions
    - Download the JSON key file and save it as `gcp-creds.json` in the project root
 
-4. Configure environment variables:
-   ```
+3. **Configure environment variables:**
+   ```bash
    cp .env.example .env
    ```
    Edit the `.env` file to update:
    - `GCP_PROJECT_ID` - Your Google Cloud project ID
-   - `GCS_BUCKET_NAME` - Name of your GCS bucket (will be created if it doesn't exist)
+   - `GCS_BUCKET_NAME` - Name of your GCS bucket
    - Other settings as needed
 
-5. Start the complete pipeline with a single command:
-   ```
-   source commands.sh && start-project
-   ```
-   This will:
-   - Verify your environment is properly set up
-   - Create GCP infrastructure with Terraform
-   - Start all required Docker containers
-   - Initialize the streaming and batch pipelines
-   - Run dbt transformations for analytics models
-   - Set up Metabase for visualization
-
-### Alternative: Step-by-Step Manual Setup
-
-If you prefer to start components individually for testing or development:
-
-1. Initialize infrastructure:
-   ```
-   source commands.sh && terraform-start
+4. **Deploy cloud infrastructure:**
+   ```bash
+   cd terraform
+   terraform init
+   terraform apply
+   cd ..
    ```
 
-2. Start and verify Kafka:
-   ```
-   source commands.sh && start-kafka && verify-kafka
-   ```
-
-3. Start Airflow:
-   ```
-   source commands.sh && start-airflow && verify-airflow
-   ```
-
-4. Start the streaming pipeline in foreground mode (shows logs):
-   ```
-   source commands.sh && docker-compose -f ./docker/streaming/docker-compose.yml --env-file ./.env up
-   ```
-   Or in background mode:
-   ```
-   source commands.sh && docker-compose -f ./docker/streaming/docker-compose.yml --env-file ./.env up -d
+5. **Start the services:**
+   ```bash
+   # Make the build script executable
+   chmod +x build.sh
+   
+   # Run the automated setup script
+   ./build.sh
    ```
 
-5. Start Spark for batch processing:
-   ```
-   source commands.sh && start-spark && verify-spark
-   ```
+6. **Verify the setup:**
+   - Kafka Control Center: http://localhost:9021
+   - Airflow: http://localhost:8080
+   - Spark Master UI: http://localhost:8088
+   - Metabase: http://localhost:3010
 
-6. Run batch processing:
-   ```
-   source commands.sh && start-batch-pipeline
-   ```
+## Data Pipeline Workflow
 
-7. Run dbt transformations:
-   ```
-   source commands.sh && run-dbt
-   ```
+1. **Data Generation and Ingestion:**
+   - Synthetic agricultural data is generated and sent to Kafka topics
+   - Data includes farm information, crop data, weather metrics, and soil properties
 
-8. Start Metabase for visualization:
-   ```
-   source commands.sh && start-metabase
-   ```
+2. **Streaming Processing:**
+   - Kafka consumers process the data in real-time
+   - Processed data is stored in Google Cloud Storage
 
-## Verifying the Pipeline
+3. **Batch Processing:**
+   - Apache Spark jobs process the data in batches
+   - Transformations include data cleaning, normalization, and feature engineering
 
-After setup, you can verify all components are working properly:
+4. **Data Warehouse Loading:**
+   - Processed data is loaded into BigQuery tables
+   - Tables are optimized for analytical queries
 
-```
-source commands.sh && verify-all
-```
+5. **dbt Transformations:**
+   - dbt models transform the data for specific business use cases
+   - Tests ensure data quality and integrity
 
-This will check:
-- Kafka broker and topic status
-- Producer message delivery
-- Consumer processing status
-- Airflow setup
-- Spark cluster status
-- Batch pipeline processing
+6. **Visualization:**
+   - Metabase dashboards provide insights into agricultural data
+   - Interactive charts show trends and patterns
 
-## Metabase Dashboard Setup
+## Dashboard Overview
 
-1. Access Metabase at http://localhost:3000
-2. Complete the initial setup:
-   - Create an admin account
-   - Connect to your data source (BigQuery)
-   - Enter your GCP project ID and use service account authentication
+The Metabase dashboard includes:
 
-3. Creating a Dashboard:
-   - Click "New" > "Dashboard"
-   - Name your dashboard (e.g., "Agricultural Analytics")
-   - Add questions using the "+ Add" button
-   - Create visualizations for:
-     - Crop yield by farm type
-     - Weather impact on production
-     - Soil quality metrics
-     - Financial performance
+1. **Crop Yield Analysis**
+   - Bar chart showing yield by crop type
+   - Time series of yield trends over seasons
 
-4. Example queries:
-   - Average yield by crop type
-   - Farm production costs vs. revenue
-   - Sustainability metrics over time
-   - Correlation between weather and yield
+2. **Weather Impact Visualization**
+   - Correlation between rainfall and crop performance
+   - Temperature effects on different crop varieties
 
-## Accessing Services
+3. **Soil Health Monitoring**
+   - Nutrient levels by farm and field
+   - pH balance tracking over time
 
-- **Kafka Control Center**: http://localhost:9021
-- **Airflow UI**: http://localhost:8080 (login credentials in your .env file, typically airflow/airflow)
-- **Spark UI**: http://localhost:8080
-- **Metabase**: http://localhost:3000
-
-## dbt Documentation
-
-To generate and view dbt documentation for your analytics models:
-
-```
-source commands.sh && serve-dbt-docs
-```
-
-This will make the documentation available at http://localhost:8080
+4. **Farm Performance Comparison**
+   - Regional performance benchmarking
+   - Efficiency metrics by farm size
 
 ## Troubleshooting
 
-- **Verifying services**: Run `source commands.sh && verify-all`
-- **Checking logs**: Run `docker logs [container_name]` (e.g., `docker logs agri_data_producer`)
-- **Restarting components**:
-  - Kafka: `source commands.sh && restart-kafka`
-  - Streaming: `source commands.sh && restart-streaming`
-  - Airflow: `source commands.sh && restart-airflow`
-  - Spark: `source commands.sh && restart-spark`
-  - dbt: `source commands.sh && run-dbt`
-- **Complete reset**: Run `source commands.sh && full-reset-and-test`
-  - The reset function will interactively ask if you want to reuse existing infrastructure resources
-  - All logs will be displayed in "frontfoot" mode (immediately visible) to help troubleshoot issues
-  - You can interrupt at any point and manually fix issues before continuing
+If you encounter any issues:
 
-## Common Issues
+1. Check the logs in the `logs/` directory
+2. Ensure all environment variables are set correctly in `.env`
+3. Verify GCP credentials are valid
+4. Check Docker container status with `docker ps`
+5. For Kafka issues, use the Control Center UI for debugging
 
-- If port conflicts occur, edit the port mappings in the `.env` file
-- For GCP authentication issues, verify your `gcp-creds.json` has the correct permissions
-- If containers fail to start, check Docker resource limits
+## Service Ports
 
-## Contributing
+| Service | Port | Description |
+|---------|------|-------------|
+| Kafka Broker | 9092 | Kafka message broker |
+| Schema Registry | 8081 | Confluent Schema Registry |
+| Kafka Control Center | 9021 | Confluent Control Center UI |
+| PostgreSQL | 5432 | Main PostgreSQL database |
+| Airflow Webserver | 8080 | Airflow UI and API |
+| Spark Master UI | 8088 | Spark master web interface |
+| Metabase | 3010 | Metabase analytics dashboard |
+| DBT Docs | 8085 | DBT documentation server |
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+## Future Enhancements
 
-## Usage
+1. Add real-time alerts based on anomaly detection
+2. Implement machine learning models for crop yield prediction
+3. Expand the dashboard with more agricultural metrics
+4. Add support for satellite imagery analysis
+5. Implement CI/CD pipeline for automated deployment
 
-This project includes several scripts to help you manage and run the data pipeline:
+## Contributors
 
-1. `commands.sh` - Contains helpful functions for managing the pipeline
-2. `rebuild.sh` - Rebuilds the entire project
-3. `cleanup.sh` - Cleans up resources when you're done
-
-### Available Commands
-
-Source the commands script to access these functions:
-
-```bash
-source commands.sh
-```
-
-Key functions:
-
-- `start-kafka` - Start Kafka and related services
-- `start-spark` - Start Spark master and workers
-- `start-postgres` - Start PostgreSQL database
-- `start-metabase` - Start Metabase for visualization
-- `start-airflow` - Start Airflow for orchestration
-- `stream-data` - Start the streaming data producer and consumer
-- `start-batch-pipeline` - Run the batch processing of data
-- `verify-kafka`, `verify-producer`, `verify-consumer`, etc. - Verify component status
-- `verify-all` - Run all verification checks
-- `check-environment` - Verify the environment is properly set up
-- `check_fix_kafka_config` - Check and fix Kafka configuration issues
-- `check_fix_gcs_config` - Check and fix Google Cloud Storage connector configuration for Spark
-- `cleanup` - Stop all services and clean up resources
-
-### Google Cloud Storage Connector
-
-The system now automatically checks and fixes Google Cloud Storage (GCS) connector configuration for Spark. The `check_fix_gcs_config` function:
-
-1. Ensures the proper GCS connector dependencies are added to the Spark configuration
-2. Configures the correct filesystem implementation classes for GCS
-3. Copies GCP credentials to the necessary locations
-4. Fixes type mismatch issues in data generation
-
-This enables seamless integration between Spark and Google Cloud Storage for data processing and storage. 
+- Abhay Ahirkar - Project Author
