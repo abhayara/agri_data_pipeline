@@ -1,0 +1,15 @@
+#!/bin/bash
+# Wrapper script to run the run_dbt function from functions.sh
+
+# Set PROJECT_ROOT to the project root directory
+export PROJECT_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+echo "Project root: $PROJECT_ROOT"
+
+# Source the functions file
+source "$PROJECT_ROOT/scripts/dbt/functions.sh"
+
+# Run the run_dbt function
+echo "Starting DBT Cloud integration..."
+run_dbt "$@"
+
+exit $? 

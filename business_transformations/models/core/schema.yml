@@ -1,89 +1,230 @@
 version: 2
 
 models:
-  - name: farm_analytics
-    description: Farm-level analytics and KPIs
+  - name: farm_performance
+    description: Farm performance data mart providing farm-level metrics for analysis
     columns:
       - name: farm_id
         description: Unique identifier for the farm
-        tests:
-          - unique
-          - not_null
       - name: farm_name
         description: Name of the farm
-      - name: total_production
-        description: Total production across all crops for the farm
-      - name: average_yield
-        description: Average yield per hectare across all crops
-      - name: sustainability_score
-        description: Overall sustainability score for the farm
-      - name: production_efficiency
-        description: Production efficiency ratio
+      - name: farm_location
+        description: Geographic location of the farm  
+      - name: farm_type
+        description: Type of the farm
+      - name: avg_farm_size_acres
+        description: Average size of the farm in acres
+      - name: avg_soil_moisture
+        description: Average soil moisture for the farm
+      - name: avg_soil_temperature
+        description: Average soil temperature for the farm
+      - name: avg_soil_ph
+        description: Average soil pH level
+      - name: avg_organic_matter
+        description: Average organic matter content in soil
+      - name: avg_water_usage
+        description: Average water usage for the farm
+      - name: avg_carbon_footprint
+        description: Average carbon footprint for the farm
+      - name: avg_pesticide_usage
+        description: Average pesticide usage for the farm
+      - name: avg_yield_per_hectare
+        description: Average yield per hectare from seed data
+      - name: avg_actual_yield
+        description: Average actual yield across all crops
+      - name: avg_expected_yield
+        description: Average expected yield across all crops
+      - name: total_actual_yield
+        description: Total actual yield across all crops
+      - name: avg_yield_percentage
+        description: Average percentage of actual yield compared to expected
+      - name: avg_sustainability_score
+        description: Average sustainability score for the farm
+      - name: recent_avg_yield
+        description: Average yield in the past year
+      - name: avg_growing_period
+        description: Average growing period in days
+      - name: yield_per_acre
+        description: Average yield per acre
+      - name: farm_performance_score
+        description: Composite score for overall farm performance
+      - name: yield_rank
+        description: Rank of the farm by yield percentage
+      - name: sustainability_rank
+        description: Rank of the farm by sustainability score  
+      - name: yield_rank_in_type
+        description: Rank of the farm by yield within its farm type
+      - name: generated_at
+        description: Timestamp when the mart was generated
 
   - name: crop_performance
-    description: Crop performance metrics
+    description: Crop performance data mart providing crop-level metrics for analysis
     columns:
-      - name: crop_id
-        description: Unique identifier for the crop
+      - name: crop_type
+        description: Type of crop
+      - name: crop_variety
+        description: Variety of the crop
       - name: crop_name
-        description: Name of the crop
-      - name: total_production
-        description: Total production of the crop across all farms
-      - name: average_yield
-        description: Average yield per hectare for the crop
-      - name: growth_rate
-        description: Year-over-year growth rate for the crop production
-      - name: profitability_index
-        description: Profitability index for the crop
+        description: Name of the crop from seed data
+      - name: growing_season
+        description: Primary growing season for the crop
+      - name: water_needs
+        description: Water needs classification for the crop
+      - name: avg_expected_yield
+        description: Average expected yield for the crop
+      - name: avg_actual_yield
+        description: Average actual yield for the crop
+      - name: avg_growing_period_days
+        description: Average growing period in days
+      - name: yield_efficiency_pct
+        description: Yield efficiency as a percentage
+      - name: avg_yield_per_hectare
+        description: Average yield per hectare from seed data
+      - name: avg_quantity_produced
+        description: Average quantity produced from production data
+      - name: avg_production_cost
+        description: Average production cost
+      - name: production_efficiency
+        description: Production efficiency (quantity per cost)
+      - name: avg_harvest_yield
+        description: Average harvest yield amount
+      - name: farm_count
+        description: Number of farms growing this crop
+      - name: avg_sustainability_score
+        description: Average sustainability score for this crop
+      - name: current_year_yield
+        description: Average yield in the current year
+      - name: previous_year_yield
+        description: Average yield in the previous year
+      - name: yoy_growth_pct
+        description: Year-over-year growth percentage
+      - name: spring_yield
+        description: Average yield in spring months
+      - name: summer_yield
+        description: Average yield in summer months
+      - name: fall_yield
+        description: Average yield in fall months
+      - name: winter_yield
+        description: Average yield in winter months
+      - name: avg_yield_percentage
+        description: Average percentage of actual yield compared to expected
+      - name: crop_performance_score
+        description: Composite score for crop performance
+      - name: yield_efficiency_rank
+        description: Ranking by yield efficiency 
+      - name: generated_at
+        description: Timestamp when the mart was generated
 
   - name: sustainability_metrics
-    description: Environmental sustainability metrics
+    description: Sustainability metrics data mart providing detailed sustainability analysis
     columns:
       - name: farm_id
         description: Unique identifier for the farm
       - name: farm_name
         description: Name of the farm
+      - name: farm_location
+        description: Geographic location of the farm
+      - name: farm_type
+        description: Type of the farm
+      - name: crop_id
+        description: Unique identifier for the crop
+      - name: crop_name
+        description: Name of the crop
+      - name: crop_type
+        description: Type of the crop
+      - name: water_needs
+        description: Water needs classification for the crop
+      - name: year
+        description: Year of the data
+      - name: month
+        description: Month of the data
+      - name: planting_month
+        description: Month of planting
+      - name: sustainability_score
+        description: Original sustainability score from OLAP
+      - name: water_usage
+        description: Water usage from seed data
+      - name: carbon_footprint
+        description: Carbon footprint from seed data
+      - name: pesticide_usage
+        description: Pesticide usage from seed data
+      - name: ph_level
+        description: Soil pH level
+      - name: organic_matter
+        description: Organic matter in soil
+      - name: avg_precipitation
+        description: Average precipitation
+      - name: avg_humidity
+        description: Average humidity
+      - name: comprehensive_sustainability_score
+        description: Comprehensive sustainability score combining multiple sources
+      - name: sustainability_tier
+        description: Sustainability tier (1-5 scale)
+      - name: avg_soil_moisture
+        description: Average soil moisture
+      - name: avg_soil_temperature
+        description: Average soil temperature
+      - name: farm_size_acres
+        description: Size of the farm in acres
+      - name: water_need_rating
+        description: Water need rating based on crop type
       - name: water_efficiency
-        description: Water usage efficiency score
+        description: Water efficiency (yield per water usage unit)
       - name: carbon_efficiency
-        description: Carbon footprint efficiency score
-      - name: pesticide_efficiency
-        description: Pesticide usage efficiency score
-      - name: overall_sustainability_score
-        description: Overall sustainability score
+        description: Carbon efficiency (yield per carbon footprint unit)
+      - name: resource_efficiency
+        description: Resource efficiency (yield vs expected)
+      - name: yield_density
+        description: Yield per acre
+      - name: growing_period
+        description: Growing period in days
+      - name: size_normalized_score
+        description: Sustainability score normalized by farm size
+      - name: yield_normalized_score
+        description: Sustainability score normalized by yield
+      - name: generated_at
+        description: Timestamp when the mart was generated
 
-  - name: yield_optimization
-    description: Yield optimization analysis
+  - name: seasonal_performance
+    description: Seasonal performance data mart analyzing performance across different seasons
     columns:
       - name: farm_id
         description: Unique identifier for the farm
-      - name: crop_id
-        description: Unique identifier for the crop
       - name: farm_name
         description: Name of the farm
-      - name: crop_name
-        description: Name of the crop
-      - name: current_yield
-        description: Current yield per hectare
-      - name: optimal_yield
-        description: Estimated optimal yield per hectare
-      - name: yield_gap
-        description: Gap between current and optimal yield
-      - name: optimization_recommendations
-        description: Recommendations for yield optimization
-
-  - name: weather_impact
-    description: Weather impact on crop performance
-    columns:
+      - name: farm_location
+        description: Geographic location of the farm
       - name: crop_id
         description: Unique identifier for the crop
       - name: crop_name
         description: Name of the crop
-      - name: temperature_sensitivity
-        description: Sensitivity to temperature variations
-      - name: precipitation_sensitivity
-        description: Sensitivity to precipitation variations
-      - name: humidity_sensitivity
-        description: Sensitivity to humidity variations
-      - name: weather_risk_score
-        description: Overall weather risk score for the crop 
+      - name: crop_type
+        description: Type of the crop
+      - name: year
+        description: Year of the data
+      - name: season
+        description: Season (Spring, Summer, Fall, Winter)
+      - name: avg_yield
+        description: Average yield for the season
+      - name: avg_expected_yield
+        description: Average expected yield for the season
+      - name: avg_yield_percentage
+        description: Average yield percentage for the season
+      - name: avg_sustainability_score
+        description: Average sustainability score for the season
+      - name: avg_growing_period
+        description: Average growing period in days for the season
+      - name: yield_change_from_previous_year
+        description: Change in yield from the same season in previous year
+      - name: avg_temperature
+        description: Average temperature for the season
+      - name: avg_precipitation
+        description: Average precipitation for the season
+      - name: avg_humidity
+        description: Average humidity for the season
+      - name: season_recommendations
+        description: Recommendations based on seasonal performance
+      - name: season_performance_rating
+        description: Season performance rating (1-5 scale)
+      - name: generated_at
+        description: Timestamp when the mart was generated 

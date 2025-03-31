@@ -87,6 +87,7 @@ help() {
     echo "  serve-dbt-docs          - Generate and serve DBT documentation"
     echo "  generate-dbt-docs       - Generate DBT documentation without serving"
     echo "  create-dbt-seeds        - Create seed files for DBT testing"
+    echo "  create-olap-tables      - Create required OLAP tables in BigQuery directly"
     echo
     echo "Usage example:"
     echo "  source scripts/main.sh"

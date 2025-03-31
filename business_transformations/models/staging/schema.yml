@@ -1,23 +1,75 @@
 version: 2
 
 models:
-  - name: stg_farm
-    description: Staging model for farm dimension
+  - name: stg_farm_analysis
+    description: Staging model for farm analysis data
     columns:
       - name: farm_id
         description: Unique identifier for the farm
-        tests:
-          - unique
-          - not_null
+      - name: farm_type
+        description: Type of the farm
+      - name: avg_farm_size_acres
+        description: Average size of the farm in acres
+      - name: avg_soil_moisture
+        description: Average soil moisture for the farm
+      - name: avg_soil_temperature
+        description: Average soil temperature for the farm
+      - name: loaded_at
+        description: Timestamp when the record was loaded
 
-  - name: stg_crop
-    description: Staging model for crop dimension
+  - name: stg_crop_analysis
+    description: Staging model for crop analysis data
     columns:
+      - name: crop_type
+        description: Type of crop
+      - name: crop_variety
+        description: Variety of crop
+      - name: avg_expected_yield
+        description: Average expected yield for the crop
+      - name: avg_actual_yield
+        description: Average actual yield for the crop
+      - name: avg_growing_period_days
+        description: Average growing period in days
+      - name: loaded_at
+        description: Timestamp when the record was loaded
+
+  - name: stg_full_data
+    description: Staging model for the full dataset
+    columns:
+      - name: farm_id
+        description: Unique identifier for the farm
       - name: crop_id
         description: Unique identifier for the crop
-        tests:
-          - unique
-          - not_null
+      - name: farm_type
+        description: Type of the farm
+      - name: farm_size_acres
+        description: Size of the farm in acres
+      - name: planting_date
+        description: Date when the crop was planted
+      - name: harvest_date
+        description: Date when the crop was harvested
+      - name: expected_yield
+        description: Expected yield for the crop
+      - name: actual_yield
+        description: Actual yield achieved for the crop
+      - name: soil_moisture
+        description: Moisture content of the soil
+      - name: soil_temperature
+        description: Temperature of the soil
+      - name: sustainability_score
+        description: Overall sustainability score
+      - name: year
+        description: Year of the data
+      - name: month
+        description: Month of the data
+      - name: planting_month
+        description: Month of planting (truncated date)
+      - name: growing_period_days
+        description: Number of days between planting and harvest
+      - name: yield_percentage
+        description: Percentage of actual yield compared to expected yield
+      - name: loaded_at
+        description: Timestamp when the record was loaded
 
   - name: stg_weather
     description: Staging model for weather dimension

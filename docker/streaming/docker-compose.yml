@@ -18,7 +18,7 @@ services:
         - MESSAGE_DELAY=${MESSAGE_DELAY}
         - KAFKA_BROKER=broker:29092
       extra_hosts:
-        - "broker:172.31.0.3"
+        - "broker:172.21.0.3"
       restart: on-failure
   
   consumer:
@@ -45,7 +45,7 @@ services:
         - GOOGLE_APPLICATION_CREDENTIALS=/home/streaming_pipeline/gcp-creds.json
         - GCP_LOCATION=${GCP_LOCATION}
       extra_hosts:
-        - "broker:172.31.0.3"
+        - "broker:172.21.0.3"
       depends_on:
         - producer
         

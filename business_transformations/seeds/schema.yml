@@ -1,0 +1,73 @@
+version: 2
+
+seeds:
+  - name: seed_crop
+    config:
+      column_types:
+        crop_id: int64
+    description: "Reference data for crops"
+
+  - name: seed_farm
+    config:
+      column_types:
+        farm_id: int64
+        farm_size: int64
+    description: "Reference data for farms"
+
+  - name: seed_harvest
+    config:
+      column_types:
+        harvest_id: int64
+        farm_id: int64
+        crop_id: int64
+        yield_amount: int64
+    description: "Harvest data"
+
+  - name: seed_production
+    config:
+      column_types:
+        production_id: int64
+        farm_id: int64
+        crop_id: int64
+        quantity_produced: int64
+        cost: int64
+    description: "Production data"
+
+  - name: seed_soil
+    config:
+      column_types:
+        soil_id: int64
+        farm_id: int64
+        ph_level: float64
+        organic_matter: float64
+    description: "Soil data for farms"
+
+  - name: seed_sustainability
+    config:
+      column_types:
+        sustainability_id: int64
+        farm_id: int64
+        water_usage: int64
+        carbon_footprint: int64
+        pesticide_usage: int64
+    description: "Sustainability metrics"
+
+  - name: seed_weather
+    config:
+      column_types:
+        weather_id: int64
+        temperature: int64
+        precipitation: int64
+        humidity: int64
+    description: "Weather data"
+
+  - name: seed_yield
+    config:
+      column_types:
+        yield_id: int64
+        farm_id: int64
+        crop_id: int64
+        harvest_id: int64
+        yield_per_hectare: float64
+        year: int64
+    description: "Yield data"

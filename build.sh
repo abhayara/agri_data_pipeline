@@ -180,6 +180,8 @@ usage() {
     echo -e "  --streaming-only  Only start the streaming pipeline"
     echo -e "  --batch-only      Only run the batch pipeline"
     echo -e "  --dbt-only        Only run the DBT transformations"
+    echo -e "  --dbt-seeds       Only load the DBT seed data"
+    echo -e "  --dbt-docs-status Check the status of the DBT documentation server"
     echo -e "  --gcs-status      Check data in GCS bucket"
     echo -e "  --rebuild-streaming Rebuild the streaming pipeline with dynamic broker IP"
 }
@@ -193,13 +195,19 @@ check_gcs_status() {
         if gsutil ls gs://${GCS_BUCKET_NAME}/ &>/dev/null; then
             echo -e "${GREEN}GCS bucket '${GCS_BUCKET_NAME}' exists${NC}"
             
-            # Check for raw data
-            echo -e "${YELLOW}Raw data:${NC}"
-            gsutil ls -r gs://${GCS_BUCKET_NAME}/raw/ 2>/dev/null || echo -e "${RED}No raw data found in bucket${NC}"
+            # Check for raw data (just show status, not content)
+            if gsutil ls -r gs://${GCS_BUCKET_NAME}/raw/ &>/dev/null && [ "$(gsutil ls -r gs://${GCS_BUCKET_NAME}/raw/ | wc -l)" -gt 0 ]; then
+                echo -e "${GREEN}✅ Raw data exists in GCS bucket${NC}"
+            else
+                echo -e "${RED}❌ No raw data found in bucket${NC}"
+            fi
             
-            # Check for OLAP data
-            echo -e "${YELLOW}OLAP data:${NC}"
-            gsutil ls -r gs://${GCS_BUCKET_NAME}/olap/ 2>/dev/null || echo -e "${RED}No OLAP data found in bucket${NC}"
+            # Check for OLAP data (just show status, not content)
+            if gsutil ls -r gs://${GCS_BUCKET_NAME}/olap/ &>/dev/null && [ "$(gsutil ls -r gs://${GCS_BUCKET_NAME}/olap/ | wc -l)" -gt 0 ]; then
+                echo -e "${GREEN}✅ OLAP data exists in GCS bucket${NC}"
+            else
+                echo -e "${RED}❌ No OLAP data found in bucket${NC}"
+            fi
         else
             echo -e "${RED}GCS bucket '${GCS_BUCKET_NAME}' doesn't exist or isn't accessible${NC}"
             return 1
@@ -402,6 +410,11 @@ main() {
         exit $?
     fi
     
+    if [ "$1" == "--dbt-docs-status" ]; then
+        check-dbt-docs-status
+        exit $?
+    fi
+    
     # Default action: rebuild everything
     print_section "Full Pipeline Rebuild"
     
@@ -483,6 +496,13 @@ main() {
         exit 1
     }
     
+    # 14. Verify DBT documentation status
+    echo -e "${YELLOW}Verifying DBT documentation status...${NC}"
+    check-dbt-docs-status || {
+        echo -e "${YELLOW}DBT documentation server is not running. Attempting to start it...${NC}"
+        serve-dbt-docs || echo -e "${RED}Failed to start DBT documentation server. Check logs.${NC}"
+    }
+    
     print_section "Pipeline Rebuild Complete"
     echo -e "${GREEN}The entire pipeline has been successfully rebuilt!${NC}"
     
@@ -497,3 +517,45 @@ main() {
 
 # Execute main function with passed arguments
 main "$@" 
+
+status() {
+    print_section "Agricultural Data Pipeline Status"
+    
+    # Check Kafka status
+    echo -e "${YELLOW}Checking Kafka status...${NC}"
+    check-kafka-status || echo -e "${RED}Kafka check failed${NC}"
+    
+    # Check Streaming status
+    echo -e "${YELLOW}Checking streaming pipeline status...${NC}"
+    check-streaming-status || echo -e "${RED}Streaming pipeline check failed${NC}"
+    
+    # Check GCS Storage status
+    echo -e "${YELLOW}Checking GCS storage status...${NC}"
+    check_gcs_status || echo -e "${RED}GCS storage check failed${NC}"
+    
+    # Check Spark status
+    echo -e "${YELLOW}Checking Spark status...${NC}"
+    check-spark-status || echo -e "${RED}Spark check failed${NC}"
+    
+    # Check Airflow status
+    echo -e "${YELLOW}Checking Airflow status...${NC}"
+    check-airflow-status || echo -e "${RED}Airflow check failed${NC}"
+    
+    # Check Batch Processing status
+    echo -e "${YELLOW}Checking batch processing status...${NC}"
+    check-batch-status || echo -e "${RED}Batch processing check failed${NC}"
+    
+    # Check DBT status
+    echo -e "${YELLOW}Checking DBT status...${NC}"
+    verify-dbt || echo -e "${RED}DBT check failed${NC}"
+    
+    # Check DBT documentation server status
+    echo -e "${YELLOW}Checking DBT documentation server status...${NC}"
+    check-dbt-docs-status || echo -e "${YELLOW}DBT documentation server is not running. Run 'serve-dbt-docs' to start it.${NC}"
+    
+    # Check Metabase status
+    echo -e "${YELLOW}Checking Metabase status...${NC}"
+    check-metabase-status || echo -e "${RED}Metabase check failed${NC}"
+    
+    print_section "Status Check Complete"
+} 

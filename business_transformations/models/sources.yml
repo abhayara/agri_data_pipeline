@@ -2,33 +2,52 @@ version: 2
 
 sources:
   - name: agri_data
-    description: Agriculture data source
-    database: "{{ env_var('BQ_PROJECT') }}"
-    schema: "{{ env_var('BQ_DATASET') }}"
+    description: Agriculture data source from the data pipeline
+    database: "agri-data-454414" # Project ID
+    schema: "agri_data" # Dataset name
     tables:
-      - name: raw_data
-        description: Raw data from the agricultural data pipeline
+      - name: farm_analysis
+        description: Farm-level analysis from Spark batch processing
+        identifier: farm_analysis
         columns:
           - name: Farm_ID
             description: Unique identifier for the farm
           - name: Farm_Type
-            description: Type of the farm (Crop, Livestock, Mixed, Horticulture)
+            description: Type of the farm
+          - name: avg_Farm_Size_Acres
+            description: Average size of the farm in acres
+          - name: avg_Soil_Moisture
+            description: Average soil moisture for the farm
+          - name: avg_Soil_Temperature
+            description: Average soil temperature for the farm
+
+      - name: crop_analysis
+        description: Crop-level analysis from Spark batch processing
+        identifier: crop_analysis
+        columns:
+          - name: Crop_Type
+            description: Type of crop
+          - name: Crop_Variety
+            description: Variety of the crop
+          - name: avg_Expected_Yield
+            description: Average expected yield for the crop
+          - name: avg_Actual_Yield
+            description: Average actual yield for the crop
+          - name: avg_Growing_Period_Days
+            description: Average growing period in days
+            
+      - name: full_data
+        description: Full dataset with partitioning by year and month
+        identifier: full_data
+        columns:
+          - name: Farm_ID
+            description: Unique identifier for the farm
+          - name: Farm_Type
+            description: Type of the farm
           - name: Farm_Size_Acres
             description: Size of the farm in acres
-          - name: Farm_Location
-            description: Geographic coordinates of the farm
-          - name: Farmer_ID
-            description: Unique identifier for the farmer
-          - name: Farmer_Name
-            description: Name of the farmer
-          - name: Farmer_Contact
-            description: Contact information for the farmer
           - name: Crop_ID
             description: Unique identifier for the crop
-          - name: Crop_Type
-            description: Type of crop (Grain, Vegetable, Fruit, Fiber, Oilseed)
-          - name: Crop_Variety
-            description: Specific variety of the crop
           - name: Planting_Date
             description: Date when the crop was planted
           - name: Harvest_Date
@@ -37,32 +56,30 @@ sources:
             description: Expected yield for the crop
           - name: Actual_Yield
             description: Actual yield achieved for the crop
-          - name: Yield_Unit
-            description: Unit of measurement for the yield
-          - name: Soil_Type
-            description: Type of soil (Clay, Sandy, Loam, Silt, Peaty)
-          - name: Soil_pH
-            description: pH level of the soil
           - name: Soil_Moisture
             description: Moisture content of the soil
           - name: Soil_Temperature
             description: Temperature of the soil
+          - name: Sustainability_Score
+            description: Overall sustainability score
+          - name: year
+            description: Year of the data (partition column)
+          - name: month
+            description: Month of the data (partition column)
+          - name: Farm_Location
+            description: Geographic coordinates of the farm
+          - name: Farmer_Contact
+            description: Contact information for the farmer
+          - name: Yield_Unit
+            description: Unit of measurement for the yield
+          - name: Soil_pH
+            description: pH level of the soil
           - name: Soil_Fertility
             description: Fertility rating of the soil
-          - name: Weather_Temperature
-            description: Temperature reading in degrees
-          - name: Weather_Humidity
-            description: Humidity percentage
-          - name: Weather_Rainfall
-            description: Rainfall measurement
           - name: Weather_Sunlight
             description: Hours of sunlight
-          - name: Irrigation_Method
-            description: Method of irrigation used
           - name: Irrigation_Amount
             description: Amount of irrigation applied
-          - name: Fertilizer_Type
-            description: Type of fertilizer used
           - name: Fertilizer_Amount
             description: Amount of fertilizer applied
           - name: Pesticide_Type
@@ -73,14 +90,8 @@ sources:
             description: Equipment used in production
           - name: Labor_Hours
             description: Labor hours spent on production
-          - name: Production_Cost
-            description: Cost of production
-          - name: Market_Price
-            description: Market price of the crop
           - name: Total_Revenue
             description: Total revenue generated
-          - name: Profit_Margin
-            description: Profit margin percentage
           - name: Quality_Grade
             description: Quality grade of the harvested crop
           - name: Certification
@@ -89,9 +100,120 @@ sources:
             description: Carbon footprint measurement
           - name: Water_Footprint
             description: Water footprint measurement
-          - name: Sustainability_Score
-            description: Overall sustainability score
           - name: timestamp
             description: Timestamp of the record
           - name: created_at
-            description: Timestamp when the record was created 
+            description: Timestamp when the record was created
+
+  - name: agri_data_seeds
+    description: Agriculture data from seed files
+    database: "agri-data-454414" # Project ID
+    schema: "agri_data" # Dataset name
+    tables:
+      - name: seed_farm
+        description: Reference data for farms
+        columns:
+          - name: farm_id
+            description: Unique identifier for the farm
+          - name: farm_name
+            description: Name of the farm
+          - name: farm_location
+            description: Geographic location of the farm
+          - name: farm_size
+            description: Size of the farm in acres
+          - name: established_date
+            description: Date the farm was established
+
+      - name: seed_crop
+        description: Reference data for crops
+        columns:
+          - name: crop_id
+            description: Unique identifier for the crop
+          - name: crop_name
+            description: Name of the crop
+          - name: crop_type
+            description: Type of crop
+          - name: growing_season
+            description: Primary growing season
+          - name: water_needs
+            description: Water needs of the crop
+
+      - name: seed_harvest
+        description: Harvest data
+        columns:
+          - name: harvest_id
+            description: Unique identifier for the harvest
+          - name: farm_id
+            description: Farm identifier
+          - name: crop_id
+            description: Crop identifier
+          - name: yield_amount
+            description: Amount of yield from harvest
+
+      - name: seed_production
+        description: Production data
+        columns:
+          - name: production_id
+            description: Unique identifier for production
+          - name: farm_id
+            description: Farm identifier
+          - name: crop_id
+            description: Crop identifier
+          - name: quantity_produced
+            description: Quantity produced
+          - name: cost
+            description: Cost of production
+
+      - name: seed_soil
+        description: Soil data for farms
+        columns:
+          - name: soil_id
+            description: Unique identifier for soil record
+          - name: farm_id
+            description: Farm identifier
+          - name: ph_level
+            description: pH level of soil
+          - name: organic_matter
+            description: Percentage of organic matter in soil
+
+      - name: seed_sustainability
+        description: Sustainability metrics
+        columns:
+          - name: sustainability_id
+            description: Unique identifier for sustainability record
+          - name: farm_id
+            description: Farm identifier
+          - name: water_usage
+            description: Water usage metric
+          - name: carbon_footprint
+            description: Carbon footprint metric
+          - name: pesticide_usage
+            description: Pesticide usage metric
+
+      - name: seed_weather
+        description: Weather data
+        columns:
+          - name: weather_id
+            description: Unique identifier for weather record
+          - name: temperature
+            description: Temperature in degrees
+          - name: precipitation
+            description: Precipitation in mm
+          - name: humidity
+            description: Humidity percentage
+
+      - name: seed_yield
+        description: Yield data
+        columns:
+          - name: yield_id
+            description: Unique identifier for yield record
+          - name: farm_id
+            description: Farm identifier
+          - name: crop_id
+            description: Crop identifier
+          - name: harvest_id
+            description: Harvest identifier
+          - name: yield_per_hectare
+            description: Yield per hectare
+          - name: year
+            description: Year of yield 
