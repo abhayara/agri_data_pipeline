@@ -11,6 +11,9 @@ Our solution is an end-to-end data pipeline that:
 4. Transforms it for analytical use cases
 5. Visualizes key agricultural metrics for decision making
 
+## Live Project Demo
+[![Demo video](https://img.youtube.com/vi/evqPnyra8nY/0.jpg)](https://www.youtube.com/watch?v=evqPnyra8nY)
+
 ## Project Architecture
 
 ![Agricultural Pipeline Architecture](images/agri_pipeline_architecture.png)
