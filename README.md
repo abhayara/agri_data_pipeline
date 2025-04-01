@@ -16,7 +16,7 @@ Our solution is an end-to-end data pipeline that:
 
 ## Project Architecture
 
-![Agricultural Pipeline Architecture](images/agri_pipeline_architecture.png)
+![Agricultural Pipeline Architecture](images/agri_pipeline_achitecture.png)
 
 ```
 +----------------+      +----------------+      +-------------------+
